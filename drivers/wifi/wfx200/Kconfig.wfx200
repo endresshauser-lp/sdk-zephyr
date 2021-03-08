@@ -1,0 +1,64 @@
+# Copyright (c) 2021 grandcentrix GmbH
+# 
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig WIFI_WFX200
+	bool "SiLabs WFX200 support"
+	select NET_L2_WIFI_MGMT
+	select WIFI_OFFLOAD
+    select SILABS_WFX_FMAC
+    select KERNEL_MEM_POOL
+    select NET_L2_ETHERNET
+    select LOG_PRINTK
+    help
+      SiLabs WFX200 WiFi Module with SPI
+      or SDIO Interface
+
+if WIFI_WFX200
+
+choice WIFI_WFX200_BUS
+    bool "Select BUS interface"
+    default WIFI_WFX200_BUS_SPI
+
+config WIFI_WFX200_BUS_SPI
+    bool "SPI Bus interface"
+    select SPI
+
+config WIFI_WFX200_BUS_SDIO
+    bool "SDIO Bus interface"
+    help
+      Not currently supported.
+
+endchoice
+
+config WIFI_WFX200_VERBOSE_DEBUG
+    bool "Enable verbose debugging"
+
+config WIFI_WFX200_STACK_SIZE
+    int "Driver task stack size"
+    default 2048
+
+config WIFI_WFX200_PRIORITY
+    int "Driver task priority"
+    default 2
+
+config WIFI_WFX200_AUTOCONNECT
+    bool "Automatic connect to Wi-Fi"
+    default y
+
+config WIFI_WFX200_SSID
+    string "SSID"
+    depends on WIFI_WFX200_AUTOCONNECT
+    default "hotspot"
+
+config WIFI_WFX200_PSK
+    string "PSK"
+    depends on WIFI_WFX200_AUTOCONNECT
+    default "12345678"
+
+config WIFI_WFX200_AP
+    bool "Boot in AP mode"
+    depends on WIFI_WFX200_AUTOCONNECT
+    default n
+
+endif # WIFI_WFX200
