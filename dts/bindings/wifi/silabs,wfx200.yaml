@@ -12,11 +12,13 @@ properties:
     int-gpios:
       type: phandle-array
       required: true
-
     reset-gpios:
       type: phandle-array
       required: true
-
     wake-gpios:
       type: phandle-array
       required: true
+    hif-sel-gpios:
+      type: phandle-array
+      required: false
+      description: GPIO used to either select the SPI or SDIO interface.
