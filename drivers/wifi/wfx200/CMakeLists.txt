@@ -7,5 +7,6 @@ if(CONFIG_WIFI_WFX200)
   zephyr_sources(
     wfx200.c
     wfx200_host.c
+    wfx200_events.c
   )
 endif()

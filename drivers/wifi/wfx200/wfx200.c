@@ -11,13 +11,17 @@
 #define LOG_MODULE_NAME wifi_wfx200
 #define LOG_LEVEL CONFIG_WIFI_LOG_LEVEL
 
+#include <sl_wfx.h>
+#undef BIT
+
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
-#include <zephyr.h>
-#include <device.h>
 #include <string.h>
 #include <errno.h>
+
+#include <zephyr.h>
+#include <device.h>
 #include <drivers/gpio.h>
 #include <drivers/spi.h>
 #include <net/net_pkt.h>
@@ -26,42 +30,40 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include "wfx200_internal.h"
 
-#include <sl_wfx.h>
-#include <firmware/sl_wfx_registers.h>
-#include <firmware/sl_wfx_cmd_api.h>
-
-K_THREAD_STACK_DEFINE(wfx200_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
+struct wfx200_dev wfx200_0 = { 0 };
 
 static void wfx200_iface_init(struct net_if *iface)
 {
+	const struct device *dev = net_if_get_device(iface);
+	struct wfx200_dev *context = dev->data;
+
 	LOG_DBG("Interface init");
-	wfx200.iface = iface;
-	net_if_set_link_addr(iface, wfx200.sl_context.mac_addr_0.octet,
-			     sizeof(wfx200.sl_context.mac_addr_0.octet),
+	context->iface = iface;
+	net_if_set_link_addr(iface, context->sl_context.mac_addr_0.octet,
+			     sizeof(context->sl_context.mac_addr_0.octet),
 			     NET_LINK_ETHERNET);
 	ethernet_init(iface);
-	wfx200.iface_initialized = true;
+	context->iface_initialized = true;
 	net_if_flag_set(iface, NET_IF_NO_AUTO_START);
-	if (IS_ENABLED(CONFIG_WIFI_WFX200_AUTOCONNECT)) {
-		sl_wfx_send_scan_command(WFM_SCAN_MODE_PASSIVE,
-					 NULL,
-					 0,
-					 NULL,
-					 0,
-					 NULL,
-					 0,
-					 NULL);
-	}
 }
 
 int wfx200_send(const struct device *dev, struct net_pkt *pkt)
 {
+	struct wfx200_dev *context = dev->data;
 	size_t len = net_pkt_get_len(pkt), frame_len;
 	sl_wfx_send_frame_req_t *tx_buffer;
 	sl_status_t result;
+	int status;
 
-	ARG_UNUSED(dev);
-
+	if (context->ap_mode) {
+		if (!(context->sl_context.state & SL_WFX_AP_INTERFACE_UP)) {
+			return -EIO;
+		}
+	} else {
+		if (!(context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED)) {
+			return -EIO;
+		}
+	}
 	frame_len = SL_WFX_ROUND_UP(len, 2);
 	result = sl_wfx_allocate_command_buffer((sl_wfx_generic_message_t **)&tx_buffer,
 						SL_WFX_SEND_FRAME_REQ_ID,
@@ -71,139 +73,387 @@ int wfx200_send(const struct device *dev, struct net_pkt *pkt)
 		return -ENOMEM;
 	}
 	if (net_pkt_read(pkt, tx_buffer->body.packet_data, len)) {
-		return -EIO;
+		status = -EIO;
+		goto error;
 	}
-	/* TODO: Handle AP */
-	result = sl_wfx_send_ethernet_frame(tx_buffer, frame_len, SL_WFX_STA_INTERFACE, WFM_PRIORITY_BE0);
+	result = sl_wfx_send_ethernet_frame(tx_buffer,
+					    frame_len,
+					    context->ap_mode?SL_WFX_SOFTAP_INTERFACE:SL_WFX_STA_INTERFACE,
+					    WFM_PRIORITY_BE0);
+	if (result != SL_STATUS_OK) {
+		status = -EIO;
+		goto error;
+	}
+
 	sl_wfx_free_command_buffer((sl_wfx_generic_message_t *)tx_buffer,
 				   SL_WFX_SEND_FRAME_REQ_ID,
 				   SL_WFX_TX_FRAME_BUFFER);
-	if (result == SL_STATUS_OK) {
-		return 0;
-	}
-	return -EIO;
+	return 0;
+
+error:
+	sl_wfx_free_command_buffer((sl_wfx_generic_message_t *)tx_buffer,
+				   SL_WFX_SEND_FRAME_REQ_ID,
+				   SL_WFX_TX_FRAME_BUFFER);
+	return status;
 }
 
-static const struct ethernet_api api_funcs = {
-	.iface_api.init = wfx200_iface_init,
-	.send = wfx200_send,
+int wfx200_scan(const struct device *dev, scan_result_cb_t cb)
+{
+	struct wfx200_dev *context = dev->data;
+	sl_status_t result;
+
+	if (!context->iface_initialized) {
+		return -EIO;
+	}
+	if (context->scan_cb != NULL) {
+		return -EINPROGRESS;
+	}
+	context->scan_cb = cb;
+	result = sl_wfx_send_scan_command(WFM_SCAN_MODE_PASSIVE,
+					  NULL,
+					  0,
+					  NULL,
+					  0,
+					  NULL,
+					  0,
+					  NULL);
+	if (result != SL_STATUS_OK) {
+		context->scan_cb = NULL;
+		return -EIO;
+	}
+	return 0;
+}
+
+int wfx200_connect(const struct device *dev, struct wifi_connect_req_params *params)
+{
+	struct wfx200_dev *context = dev->data;
+	char ssid[WIFI_SSID_MAX_LEN + 1];
+	sl_wfx_security_mode_t mode;
+	sl_status_t result;
+	uint16_t channel;
+
+	if (!context->iface_initialized) {
+		return -ENODEV;
+	}
+	if ((context->sl_context.state & SL_WFX_AP_INTERFACE_UP) || context->ap_mode) {
+		return -EBUSY;
+	}
+	if (context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED) {
+		return -EALREADY;
+	}
+
+	memcpy(ssid, params->ssid, MIN(params->ssid_length, sizeof(ssid)));
+	ssid[MIN(params->ssid_length, WIFI_SSID_MAX_LEN)] = 0;
+
+	if (params->security == WIFI_SECURITY_TYPE_PSK) {
+		mode = WFM_SECURITY_MODE_WPA2_WPA1_PSK;
+	} else if (params->security == WIFI_SECURITY_TYPE_NONE) {
+		mode = WFM_SECURITY_MODE_OPEN;
+	} else {
+		LOG_ERR("Not supported security mode");
+		return -ENOTSUP;
+	}
+
+	if (params->channel <= WIFI_CHANNEL_MAX) {
+		channel = params->channel;
+	} else {
+		channel = 0;
+	}
+
+	LOG_INF("Connecting to %s on channel %d", log_strdup(ssid), channel);
+
+	result = sl_wfx_send_join_command(params->ssid,
+					  params->ssid_length,
+					  NULL,
+					  channel,
+					  mode,
+					  0,
+					  0,
+					  (const uint8_t *)params->psk,
+					  params->psk_length,
+					  NULL,
+					  0
+					  );
+	if (result != SL_STATUS_OK) {
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int wfx200_disconnect(const struct device *dev)
+{
+	struct wfx200_dev *context = dev->data;
+	sl_status_t result;
+
+	if (!context->iface_initialized) {
+		return -ENODEV;
+	}
+	if (!context->iface_initialized || context->ap_mode) {
+		return -EBUSY;
+	}
+	if (!(context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED)) {
+		return 0;
+	}
+
+	result = sl_wfx_send_disconnect_command();
+	if (result != SL_STATUS_OK) {
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int wfx200_ap_enable(const struct device *dev, struct wifi_connect_req_params *params)
+{
+	struct wfx200_dev *context = dev->data;
+	sl_wfx_status_t result;
+
+	if (!context->iface_initialized) {
+		return -ENODEV;
+	}
+	if (context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED) {
+		return -EBUSY;
+	}
+	if (context->sl_context.state & SL_WFX_AP_INTERFACE_UP) {
+		return -EALREADY;
+	}
+	if (params->channel < 1 || params->channel > 14) {
+		return -ERANGE;
+	}
+	if (params->ssid_length < 1 || params->ssid_length > WIFI_SSID_MAX_LEN) {
+		return -EINVAL;
+	}
+	if (params->ssid == NULL) {
+		return -EINVAL;
+	}
+	if (params->security == WIFI_SECURITY_TYPE_PSK) {
+		if (params->psk_length < 8 || params->psk_length > WIFI_PSK_MAX_LEN) {
+			return -EINVAL;
+		}
+		if (params->psk == NULL) {
+			return -EINVAL;
+		}
+	}
+
+	result = sl_wfx_start_ap_command(
+		params->channel,
+		params->ssid,
+		params->ssid_length,
+		0,
+		0,
+		(params->security == WIFI_SECURITY_TYPE_PSK)?
+		WFM_SECURITY_MODE_WPA2_PSK:
+		WFM_SECURITY_MODE_OPEN,
+		0,
+		params->psk,
+		params->psk_length,
+		NULL,
+		0,
+		NULL,
+		0
+		);
+	if (result != SL_STATUS_OK) {
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int wfx200_ap_disable(const struct device *dev)
+{
+	struct wfx200_dev *context = dev->data;
+	sl_status_t result;
+
+	if (!context->iface_initialized) {
+		return -ENODEV;
+	}
+	if (!(context->sl_context.state & SL_WFX_AP_INTERFACE_UP)) {
+		return 0;
+	}
+
+	result = sl_wfx_stop_ap_command();
+	if (result != SL_STATUS_OK) {
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static const struct net_wifi_mgmt api_funcs = {
+	.eth_api = {
+		.iface_api.init = wfx200_iface_init,
+		.send = wfx200_send,
+	},
+	.scan = wfx200_scan,
+	.connect = wfx200_connect,
+	.disconnect = wfx200_disconnect,
+	.ap_enable = wfx200_ap_enable,
+	.ap_disable = wfx200_ap_disable,
 };
 
 void wfx200_interrupt_handler(const struct device *dev, struct gpio_callback *cb,
 			      uint32_t pins)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(cb);
+	struct wfx200_dev *context = CONTAINER_OF(cb, struct wfx200_dev, int_cb);
+
 	ARG_UNUSED(pins);
+	ARG_UNUSED(dev);
 
 	if (IS_ENABLED(CONFIG_WIFI_WFX200_BUS_SPI)) {
-		k_sem_give(&wfx200.wakeup_sem);
-		k_work_submit_to_queue(&wfx200.work_q, &wfx200.work);
+		if (IS_ENABLED(CONFIG_WIFI_WFX200_SLEEP)) {
+			k_sem_give(&context->wakeup_sem);
+		}
+		k_work_submit_to_queue(&context->incoming_work_q, &context->incoming_work);
 	}
 }
 
-void wfx200_handle_incoming(struct k_work *item)
+void wfx200_incoming_work(struct k_work *item)
 {
 	uint16_t control_register = 0;
 
-	ARG_UNUSED(item);
+    ARG_UNUSED(item);
 
 	do {
-		/* TODO: Disable interrupt? */
 		if (sl_wfx_receive_frame(&control_register) != SL_STATUS_OK) {
 			break;
 		}
 	} while ((control_register & SL_WFX_CONT_NEXT_LEN_MASK) != 0);
 }
 
+void wfx200_enable_interrupt(struct wfx200_dev *context)
+{
+	LOG_DBG("Interrupt enabled");
+	if (gpio_add_callback(context->interrupt.dev, &context->int_cb) < 0) {
+		LOG_ERR("Failed to enable interrupt");
+	}
+}
+
+void wfx200_disable_interrupt(struct wfx200_dev *context)
+{
+	LOG_DBG("Interrupt disabled");
+	if (gpio_remove_callback(context->interrupt.dev, &context->int_cb) < 0) {
+		LOG_ERR("Failed to disable interrupt");
+	}
+}
+
 static int wfx200_init(const struct device *dev)
 {
 	int res;
+	const struct wfx200_config *config = dev->config;
+	struct wfx200_dev *context = dev->data;
+
+	context->dev = dev;
 
 	LOG_INF("Initializing WFX200 Driver, using FMAC Driver Version %s", FMAC_DRIVER_VERSION_STRING);
-	k_sem_init(&wfx200.wakeup_sem, 0, 1);
-	k_sem_init(&wfx200.event_sem, 0, K_SEM_MAX_LIMIT);
-	k_mutex_init(&wfx200.bus_mutex);
-	k_mutex_init(&wfx200.event_mutex);
-	wfx200.reset.dev = device_get_binding(DT_INST_GPIO_LABEL(0, reset_gpios));
-	if (!wfx200.reset.dev) {
+
+	k_sem_init(&context->wakeup_sem, 0, 1);
+	k_sem_init(&context->event_sem, 0, K_SEM_MAX_LIMIT);
+
+	k_mutex_init(&context->bus_mutex);
+	k_mutex_init(&context->event_mutex);
+
+	context->reset.dev = device_get_binding(config->reset.port);
+	if (!context->reset.dev) {
 		LOG_ERR("Failed to initialize GPIO driver: %s",
-			DT_INST_GPIO_LABEL(0, reset_gpios));
+			config->reset.port);
 		return -ENODEV;
 	}
-	wfx200.reset.pin = DT_INST_GPIO_PIN(0, reset_gpios);
-	if (gpio_pin_configure(wfx200.reset.dev, wfx200.reset.pin,
-			       DT_INST_GPIO_FLAGS(0, reset_gpios) | GPIO_OUTPUT_INACTIVE) < 0) {
-		LOG_ERR("Failed to configure %s pin %d", DT_INST_GPIO_LABEL(0, reset_gpios),
-			wfx200.reset.pin);
+	context->reset.pin = config->reset.pin;
+	if (gpio_pin_configure(context->reset.dev, config->reset.pin,
+			       config->reset.flags | GPIO_OUTPUT_INACTIVE) < 0) {
+		LOG_ERR("Failed to configure %s pin %d", config->reset.port,
+			config->reset.pin);
 		return -ENODEV;
 	}
-	wfx200.wakeup.dev = device_get_binding(DT_INST_GPIO_LABEL(0, wake_gpios));
-	if (!wfx200.wakeup.dev) {
-		LOG_ERR("Failed to initialize GPIO driver: %s",
-			DT_INST_GPIO_LABEL(0, wake_gpios));
+
+	if (DT_INST_NODE_HAS_PROP(0, wake_gpios)) {
+		context->wakeup.dev = device_get_binding(config->wakeup.port);
+		if (!context->wakeup.dev) {
+			LOG_ERR("Failed to initialize GPIO driver: %s", config->wakeup.port);
+			return -ENODEV;
+		}
+		context->wakeup.pin = config->wakeup.pin;
+		if (gpio_pin_configure(context->wakeup.dev, config->wakeup.pin,
+				       config->wakeup.flags | GPIO_OUTPUT_ACTIVE) < 0) {
+			LOG_ERR("Failed to configure %s pin %d", config->wakeup.port, config->wakeup.pin);
+			return -ENODEV;
+		}
+	} else {
+		context->wakeup.dev = NULL;
+	}
+
+	context->interrupt.dev = device_get_binding(config->interrupt.port);
+	if (!context->interrupt.dev) {
+		LOG_ERR("Failed to initialize GPIO driver: %s", config->interrupt.port);
 		return -ENODEV;
 	}
-	wfx200.wakeup.pin = DT_INST_GPIO_PIN(0, wake_gpios);
-	if (gpio_pin_configure(wfx200.wakeup.dev, wfx200.wakeup.pin,
-			       DT_INST_GPIO_FLAGS(0, wakeup_gpios) | GPIO_OUTPUT_INACTIVE) < 0) {
-		LOG_ERR("Failed to configure %s pin %d", DT_INST_GPIO_LABEL(0, wake_gpios),
-			wfx200.wakeup.pin);
+	context->interrupt.pin = config->interrupt.pin;
+	if (gpio_pin_configure(context->interrupt.dev, config->interrupt.pin,
+			       config->interrupt.flags | GPIO_INPUT) < 0) {
+		LOG_ERR("Failed to configure %s pin %d", config->interrupt.port, config->interrupt.pin);
 		return -ENODEV;
 	}
-	wfx200.interrupt.dev = device_get_binding(DT_INST_GPIO_LABEL(0, int_gpios));
-	if (!wfx200.interrupt.dev) {
-		LOG_ERR("Failed to initialize GPIO driver: %s",
-			DT_INST_GPIO_LABEL(0, int_gpios));
-		return -ENODEV;
-	}
-	wfx200.interrupt.pin = DT_INST_GPIO_PIN(0, int_gpios);
-	if (gpio_pin_configure(wfx200.interrupt.dev, wfx200.interrupt.pin,
-			       DT_INST_GPIO_FLAGS(0, int_gpios) | GPIO_INPUT) < 0) {
-		LOG_ERR("Failed to configure %s pin %d", DT_INST_GPIO_LABEL(0, int_gpios),
-			wfx200.interrupt.pin);
-		return -ENODEV;
-	}
-	if (gpio_pin_interrupt_configure(wfx200.interrupt.dev, wfx200.interrupt.pin,
+	if (gpio_pin_interrupt_configure(context->interrupt.dev, config->interrupt.pin,
 					 GPIO_INT_EDGE_TO_ACTIVE) < 0) {
-		LOG_ERR("Failed to configure interrupt on %s pin %d", DT_INST_GPIO_LABEL(0, int_gpios),
-			wfx200.interrupt.pin);
+		LOG_ERR("Failed to configure interrupt on %s pin %d", config->interrupt.port,
+			config->interrupt.pin);
 		return -ENODEV;
 	}
-	gpio_init_callback(&wfx200.int_cb, wfx200_interrupt_handler, BIT(wfx200.interrupt.pin));
-	gpio_add_callback(wfx200.interrupt.dev, &wfx200.int_cb);
+	gpio_init_callback(&context->int_cb, wfx200_interrupt_handler, BIT(config->interrupt.pin));
+
+	if (DT_INST_NODE_HAS_PROP(0, hif_sel_gpios)) {
+		context->hif_sel.dev = device_get_binding(config->hif_select.port);
+		if (!context->hif_sel.dev) {
+			LOG_ERR("Failed to initialize GPIO driver: %s", config->hif_select.port);
+			return -ENODEV;
+		}
+		context->hif_sel.pin = config->hif_select.pin;
+		if (gpio_pin_configure(context->hif_sel.dev, config->hif_select.pin,
+				       config->hif_select.flags | GPIO_OUTPUT_INACTIVE) < 0) {
+			LOG_ERR("Failed to configure %s pin %d", config->hif_select.port, config->hif_select.pin);
+			return -ENODEV;
+		}
+	} else {
+		context->hif_sel.dev = NULL;
+	}
+
 	if (IS_ENABLED(CONFIG_WIFI_WFX200_BUS_SPI)) {
 		/* setup SPI device */
-		wfx200.spi = device_get_binding(DT_INST_BUS_LABEL(0));
-		if (!wfx200.spi) {
+		context->spi = device_get_binding(config->spi_port);
+		if (!context->spi) {
 			LOG_ERR("Unable to get SPI device binding");
 			return -ENODEV;
 		}
-		wfx200.spi_cfg.operation = SPI_WORD_SET(8) | SPI_TRANSFER_MSB | SPI_OP_MODE_MASTER;
-		wfx200.spi_cfg.frequency = DT_INST_PROP(0, spi_max_frequency);
-		wfx200.spi_cfg.slave = DT_INST_REG_ADDR(0);
+		context->spi_cfg.operation = SPI_WORD_SET(8) | SPI_TRANSFER_MSB | SPI_OP_MODE_MASTER;
+		context->spi_cfg.frequency = config->spi_freq;
+		context->spi_cfg.slave = config->spi_slave;
 		if (DT_INST_SPI_DEV_HAS_CS_GPIOS(0)) {
-			wfx200.cs_ctrl.gpio_dev = device_get_binding(
-				DT_INST_SPI_DEV_CS_GPIOS_LABEL(0));
-			if (!wfx200.cs_ctrl.gpio_dev) {
+			context->cs_ctrl.gpio_dev = device_get_binding(config->spi_cs.port);
+			if (!context->cs_ctrl.gpio_dev) {
 				LOG_ERR("Unable to get GPIO SPI CS device");
 				return -ENODEV;
 			}
-			wfx200.cs_ctrl.gpio_pin = DT_INST_SPI_DEV_CS_GPIOS_PIN(0);
-			wfx200.cs_ctrl.gpio_dt_flags = DT_INST_SPI_DEV_CS_GPIOS_FLAGS(0);
-			wfx200.cs_ctrl.delay = 0U;
-			wfx200.spi_cfg.cs = &wfx200.cs_ctrl;
-			LOG_DBG("SPI GPIO CS configured on %s:%u",
-				DT_INST_SPI_DEV_CS_GPIOS_LABEL(0),
-				DT_INST_SPI_DEV_CS_GPIOS_PIN(0));
+			context->cs_ctrl.gpio_pin = config->spi_cs.pin;
+			context->cs_ctrl.gpio_dt_flags = config->spi_cs.flags;
+			context->cs_ctrl.delay = 0U;
+			context->spi_cfg.cs = &context->cs_ctrl;
+			LOG_DBG("SPI GPIO CS configured on %s:%u", config->spi_cs.port, config->spi_cs.pin);
 		}
 	}
-	k_work_queue_start(&wfx200.work_q, wfx200_stack_area, K_THREAD_STACK_SIZEOF(wfx200_stack_area),
-			   CONFIG_WIFI_WFX200_PRIORITY, &(const struct k_work_queue_config){
-		.name = "wfx200",
-	});
-	k_work_init(&wfx200.work, wfx200_handle_incoming);
-	res = sl_wfx_init(&wfx200.sl_context);
+
+	k_work_queue_start(&context->incoming_work_q, context->wfx200_stack_area,
+			   K_THREAD_STACK_SIZEOF(context->wfx200_stack_area),
+			   CONFIG_WIFI_WFX200_PRIORITY,
+			   &(const struct k_work_queue_config){ .name = "wfx200_rx", });
+	k_work_init(&context->incoming_work, wfx200_incoming_work);
+	k_queue_init(&context->event_queue);
+	k_thread_create(&context->event_thread, context->wfx200_event_stack_area,
+			K_THREAD_STACK_SIZEOF(context->wfx200_event_stack_area),
+			wfx200_event_thread, context, NULL, NULL,
+			CONFIG_WIFI_WFX200_PRIORITY, 0, K_NO_WAIT);
+
+	res = sl_wfx_init(&context->sl_context);
 	if (res != SL_STATUS_OK) {
 		switch (res) {
 		case SL_STATUS_WIFI_INVALID_KEY:
@@ -225,13 +475,32 @@ static int wfx200_init(const struct device *dev)
 	}
 	LOG_INF("WFX200 driver initialized");
 	LOG_INF("FW version %d.%d.%d",
-		wfx200.sl_context.firmware_major,
-		wfx200.sl_context.firmware_minor,
-		wfx200.sl_context.firmware_build);
+		context->sl_context.firmware_major,
+		context->sl_context.firmware_minor,
+		context->sl_context.firmware_build);
 	return 0;
 }
 
+static const struct wfx200_config wfx200_0_config = {
+	.interrupt = WFX200_INIT_GPIO_CONFIG(0, int_gpios),
+	.reset = WFX200_INIT_GPIO_CONFIG(0, reset_gpios),
+	.wakeup = WFX200_INIT_GPIO_CONFIG(0, wake_gpios),
+#if DT_INST_NODE_HAS_PROP(0, hif_sel_gpios)
+	.hif_select = WFX200_INIT_GPIO_CONFIG(0, hif_sel_gpios),
+#endif
+#if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
+	.spi_cs = {
+		.port = DT_INST_SPI_DEV_CS_GPIOS_LABEL(0),
+		.pin = DT_INST_SPI_DEV_CS_GPIOS_PIN(0),
+		.flags = DT_INST_SPI_DEV_CS_GPIOS_FLAGS(0),
+	},
+#endif
+	.spi_port = DT_INST_BUS_LABEL(0),
+	.spi_freq = DT_INST_PROP(0, spi_max_frequency),
+	.spi_slave = DT_INST_REG_ADDR(0),
+};
+
 ETH_NET_DEVICE_DT_INST_DEFINE(0,
 			      wfx200_init, device_pm_control_nop,
-			      &wfx200, NULL,
-			      CONFIG_ETH_INIT_PRIORITY, &api_funcs, NET_ETH_MTU);
+			      &wfx200_0, &wfx200_0_config,
+			      CONFIG_WIFI_INIT_PRIORITY, &api_funcs, NET_ETH_MTU);
