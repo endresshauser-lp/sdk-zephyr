@@ -8,5 +8,5 @@ config HAS_SILABS_GECKO
 	select HAS_CMSIS_CORE
 	depends on SOC_FAMILY_EXX32
 
-config SILABS_WFX_FMAC
+config HAS_SILABS_WFX_FMAC
     bool
