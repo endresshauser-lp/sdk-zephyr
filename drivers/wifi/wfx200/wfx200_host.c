@@ -7,6 +7,9 @@
 #define LOG_MODULE_NAME wifi_wfx200_host
 #define LOG_LEVEL CONFIG_WIFI_LOG_LEVEL
 
+#include <sl_wfx.h>
+#undef BIT
+
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
@@ -14,7 +17,6 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <stdint.h>
 
 #include <zephyr.h>
-#include <kernel.h>
 #include <device.h>
 #include <sys/util.h>
 #include <drivers/spi.h>
@@ -22,11 +24,6 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include "wfx200_internal.h"
 
-#include <sl_wfx.h>
-#include <sl_status.h>
-#include <sl_wfx_bus.h>
-#include <sl_wfx_host_api.h>
-#include <sl_wfx_general_api.h>
 #include <sl_wfx_wf200_C0.h>
 
 #define WFX200_HOST_NOT_IMPLEMENTED() do {		      \
@@ -34,7 +31,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 		return SL_STATUS_FAIL;			      \
 } while (0);
 
-struct wfx200_dev wfx200 = { 0 };
+extern struct wfx200_dev wfx200_0;
 
 static const char *const pds_table_brd8023a[] = {
 	"{a:{a:4,b:0}}",
@@ -70,11 +67,11 @@ sl_status_t sl_wfx_host_init(void)
 
 sl_status_t sl_wfx_host_get_firmware_data(const uint8_t **data, uint32_t data_size)
 {
-	if (data == NULL || wfx200.firmware_pos >= sizeof(sl_wfx_firmware)) {
+	if (data == NULL || wfx200_0.firmware_pos >= sizeof(sl_wfx_firmware)) {
 		return SL_STATUS_FAIL;
 	}
-	*data = sl_wfx_firmware + wfx200.firmware_pos;
-	wfx200.firmware_pos += data_size;
+	*data = sl_wfx_firmware + wfx200_0.firmware_pos;
+	wfx200_0.firmware_pos += data_size;
 	return SL_STATUS_OK;
 }
 
@@ -122,10 +119,19 @@ sl_status_t sl_wfx_host_deinit(void)
 sl_status_t sl_wfx_host_reset_chip(void)
 {
 	LOG_DBG("resetting chip");
-	gpio_pin_set(wfx200.reset.dev, wfx200.reset.pin, 1);
+	if (wfx200_0.hif_sel.dev != NULL) {
+		if (IS_ENABLED(CONFIG_WIFI_WFX200_BUS_SPI)) {
+			LOG_DBG("selecting SPI interface");
+			gpio_pin_set(wfx200_0.hif_sel.dev, wfx200_0.hif_sel.pin, 0);
+		} else if (IS_ENABLED(CONFIG_WIFI_WFX200_BUS_SDIO)) {
+			LOG_DBG("selecting SDIO interface");
+			gpio_pin_set(wfx200_0.hif_sel.dev, wfx200_0.hif_sel.pin, 1);
+		}
+	}
+	gpio_pin_set(wfx200_0.reset.dev, wfx200_0.reset.pin, 1);
 	/* arbitrary reset pulse length */
 	k_sleep(K_MSEC(50));
-	gpio_pin_set(wfx200.reset.dev, wfx200.reset.pin, 0);
+	gpio_pin_set(wfx200_0.reset.dev, wfx200_0.reset.pin, 0);
 	/* The WFM200 Wi-Fi Expansion Board has a built in reset delay of 1 ms.
 	 * Wait here 2 ms to ensure the reset has been released
 	 */
@@ -135,26 +141,38 @@ sl_status_t sl_wfx_host_reset_chip(void)
 
 sl_status_t sl_wfx_host_set_wake_up_pin(uint8_t state)
 {
-	if (state > 0) {
-		gpio_pin_set(wfx200.wakeup.dev, wfx200.wakeup.pin, 1);
+	if (wfx200_0.wakeup.dev != NULL) {
+		if (state > 0) {
+			gpio_pin_set(wfx200_0.wakeup.dev, wfx200_0.wakeup.pin, 1);
+		} else {
+			gpio_pin_set(wfx200_0.wakeup.dev, wfx200_0.wakeup.pin, 0);
+		}
 	} else {
-		gpio_pin_set(wfx200.wakeup.dev, wfx200.wakeup.pin, 0);
+		LOG_WRN("Set wake up pin requested, but wake up pin not configured");
 	}
 	return SL_STATUS_OK;
 }
 
 sl_status_t sl_wfx_host_wait_for_wake_up(void)
 {
-	k_sem_take(&wfx200.wakeup_sem, K_NO_WAIT);
-	/* Time taken from sample code */
-	k_sem_take(&wfx200.wakeup_sem, K_MSEC(3));
+	int result;
+
+	if (IS_ENABLED(CONFIG_WIFI_WFX200_SLEEP)) {
+		k_sem_take(&wfx200_0.wakeup_sem, K_NO_WAIT);
+		/* Time taken from sample code */
+		result = k_sem_take(&wfx200_0.wakeup_sem, K_MSEC(3));
+		if (result == -EAGAIN) {
+			LOG_DBG("Wake up timed out");
+			return SL_STATUS_TIMEOUT;
+		}
+	}
 	return SL_STATUS_OK;
 }
 
 sl_status_t sl_wfx_host_hold_in_reset(void)
 {
 	LOG_DBG("holding chip in reset");
-	gpio_pin_set(wfx200.reset.dev, wfx200.reset.pin, 1);
+	gpio_pin_set(wfx200_0.reset.dev, wfx200_0.reset.pin, 1);
 	return SL_STATUS_OK;
 }
 
@@ -165,7 +183,11 @@ sl_status_t sl_wfx_host_sleep_grant(sl_wfx_host_bus_transfer_type_t type,
 	ARG_UNUSED(type);
 	ARG_UNUSED(address);
 	ARG_UNUSED(length);
-	return SL_STATUS_WIFI_SLEEP_GRANTED;
+	/* TODO: we could give a answer depending on the host devices state */
+	if (IS_ENABLED(CONFIG_WIFI_WFX200_SLEEP)) {
+		return SL_STATUS_WIFI_SLEEP_GRANTED;
+	}
+	return SL_STATUS_WIFI_SLEEP_NOT_GRANTED;
 }
 
 /**
@@ -181,16 +203,16 @@ sl_status_t sl_wfx_host_transmit_frame(void *frame, uint32_t frame_len)
  */
 sl_status_t sl_wfx_host_setup_waited_event(uint8_t event_id)
 {
-	k_mutex_lock(&wfx200.event_mutex, K_FOREVER);
+	k_mutex_lock(&wfx200_0.event_mutex, K_FOREVER);
 	/* Resetting the semaphore will unblock all current waiting tasks.
 	 * The event, they are waiting for, will never arrive.*/
-	if (wfx200.waited_event_id != 0 && wfx200.waited_event_id != event_id) {
+	if (wfx200_0.waited_event_id != 0 && wfx200_0.waited_event_id != event_id) {
 		LOG_WRN("Still waiting for event 0x%02x while setting up waiter for 0x%02x",
-			wfx200.waited_event_id, event_id);
-		k_sem_reset(&wfx200.event_sem);
+			wfx200_0.waited_event_id, event_id);
+		k_sem_reset(&wfx200_0.event_sem);
 	}
-	wfx200.waited_event_id = event_id;
-	k_mutex_unlock(&wfx200.event_mutex);
+	wfx200_0.waited_event_id = event_id;
+	k_mutex_unlock(&wfx200_0.event_mutex);
 	return SL_STATUS_OK;
 }
 
@@ -198,30 +220,30 @@ sl_status_t sl_wfx_host_wait_for_confirmation(uint8_t confirmation_id,
 					      uint32_t timeout_ms,
 					      void **event_payload_out)
 {
-	k_mutex_lock(&wfx200.event_mutex, K_FOREVER);
-	if (wfx200.waited_event_id != confirmation_id) {
-		if (wfx200.waited_event_id == 0) {
+	k_mutex_lock(&wfx200_0.event_mutex, K_FOREVER);
+	if (wfx200_0.waited_event_id != confirmation_id) {
+		if (wfx200_0.waited_event_id == 0) {
 			LOG_DBG("Confirmation waiter wasn't set up, now waiting for event 0x%02x",
 				confirmation_id);
 		} else {
 			LOG_WRN("Confirmation waiter set up to wait for event 0x%02x but waiting for 0x%02x",
-				wfx200.waited_event_id, confirmation_id);
+				wfx200_0.waited_event_id, confirmation_id);
 		}
-		k_sem_reset(&wfx200.event_sem);
-		wfx200.waited_event_id = confirmation_id;
+		k_sem_reset(&wfx200_0.event_sem);
+		wfx200_0.waited_event_id = confirmation_id;
 	}
-	k_mutex_unlock(&wfx200.event_mutex);
+	k_mutex_unlock(&wfx200_0.event_mutex);
 
-	if (k_sem_take(&wfx200.event_sem, K_MSEC(timeout_ms)) == -EAGAIN) {
+	if (k_sem_take(&wfx200_0.event_sem, K_MSEC(timeout_ms)) == -EAGAIN) {
 		LOG_WRN("Didn't receive confirmation for event 0x%02x", confirmation_id);
 		return SL_STATUS_TIMEOUT;
 	}
-	k_mutex_lock(&wfx200.event_mutex, K_FOREVER);
-	wfx200.waited_event_id = 0;
+	k_mutex_lock(&wfx200_0.event_mutex, K_FOREVER);
+	wfx200_0.waited_event_id = 0;
+	k_mutex_unlock(&wfx200_0.event_mutex);
 	if (event_payload_out != NULL) {
-		*event_payload_out = wfx200.sl_context.event_payload_buffer;
+		*event_payload_out = wfx200_0.sl_context.event_payload_buffer;
 	}
-	k_mutex_unlock(&wfx200.event_mutex);
 	return SL_STATUS_OK;
 }
 
@@ -300,9 +322,9 @@ sl_status_t sl_wfx_host_post_event(sl_wfx_generic_message_t *event_payload)
 		break;
 	}
 
-	k_mutex_lock(&wfx200.event_mutex, K_FOREVER);
-	if (wfx200.waited_event_id == event_payload->header.id) {
-		if (event_payload->header.length < sizeof(wfx200.sl_context.event_payload_buffer)) {
+	k_mutex_lock(&wfx200_0.event_mutex, K_FOREVER);
+	if (wfx200_0.waited_event_id == event_payload->header.id) {
+		if (event_payload->header.length < sizeof(wfx200_0.sl_context.event_payload_buffer)) {
 			/* Post the event into the "queue".
 			 * Not using a queue here. The SiLabs examples use the queue similar to a
 			 * counting semaphore and are not passing the "queue" elements via the "queue"
@@ -311,13 +333,13 @@ sl_status_t sl_wfx_host_post_event(sl_wfx_generic_message_t *event_payload)
 			 * which it has been configured to explicit waiting for. A queue is therefore
 			 * not needed.
 			 * */
-			memcpy(wfx200.sl_context.event_payload_buffer,
+			memcpy(wfx200_0.sl_context.event_payload_buffer,
 			       (void *) event_payload,
 			       event_payload->header.length);
-			k_sem_give(&wfx200.event_sem);
+			k_sem_give(&wfx200_0.event_sem);
 		}
 	}
-	k_mutex_unlock(&wfx200.event_mutex);
+	k_mutex_unlock(&wfx200_0.event_mutex);
 
 	return SL_STATUS_OK;
 }
@@ -325,14 +347,20 @@ sl_status_t sl_wfx_host_post_event(sl_wfx_generic_message_t *event_payload)
 /* WFX host callbacks */
 void sl_wfx_connect_callback(sl_wfx_connect_ind_t *connect)
 {
+	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+
+	if (event == NULL) {
+		/* TODO */
+		return;
+	}
+
 	switch (connect->body.status) {
 	case WFM_STATUS_SUCCESS:
 		LOG_INF("Connected");
-		sl_wfx_context->state |= SL_WFX_STA_INTERFACE_CONNECTED;
-		if (wfx200.iface_initialized) {
-			net_if_up(wfx200.iface);
-		}
-		break;
+		wfx200_0.sl_context.state |= SL_WFX_STA_INTERFACE_CONNECTED;
+		event->ev = WFX200_CONNECT_EVENT;
+		k_queue_append(&wfx200_0.event_queue, event);
+		return;
 	case WFM_STATUS_NO_MATCHING_AP:
 		LOG_ERR("Connection failed, access point not found");
 		break;
@@ -351,73 +379,62 @@ void sl_wfx_connect_callback(sl_wfx_connect_ind_t *connect)
 	default:
 		LOG_ERR("Connection attempt error");
 	}
-}
-
-struct sl_wfx_scan_result_ind_body_s scanres;
-bool found = false;
-
-void connect_to_selected_wifi()
-{
-	char ssid[33];
-	sl_wfx_security_mode_t mode;
-
-	if (found) {
-		memcpy(ssid,
-		       scanres.ssid_def.ssid,
-		       MIN(sizeof(ssid), scanres.ssid_def.ssid_length));
-		ssid[scanres.ssid_def.ssid_length] = 0;
-
-		if (scanres.security_mode.wpa2) {
-			mode = WFM_SECURITY_MODE_WPA2_PSK;
-		} else if (scanres.security_mode.wpa) {
-			mode = WFM_SECURITY_MODE_WPA2_WPA1_PSK;
-		} else if (scanres.security_mode.wep) {
-			mode = WFM_SECURITY_MODE_WEP;
-		} else if (!scanres.security_mode.psk && !scanres.security_mode.eap) {
-			mode = WFM_SECURITY_MODE_OPEN;
-		} else {
-			LOG_ERR("Not supported security mode for %s", log_strdup(ssid));
-			return;
-		}
-		LOG_INF("Connecting to %s on channel %d", log_strdup(ssid), scanres.channel);
-		sl_wfx_send_join_command(scanres.ssid_def.ssid,
-					 scanres.ssid_def.ssid_length,
-					 NULL,
-					 scanres.channel,
-					 mode,
-					 0,
-					 0,
-					 (const uint8_t *)CONFIG_WIFI_WFX200_PSK,
-					 strlen(CONFIG_WIFI_WFX200_PSK),
-					 NULL,
-					 0
-					 );
-	}
+	event->ev = WFX200_CONNECT_FAILED_EVENT;
+	k_queue_append(&wfx200_0.event_queue, event);
 }
 
 void sl_wfx_disconnect_callback(sl_wfx_disconnect_ind_t *disconnect)
 {
 	ARG_UNUSED(disconnect);
-	if (wfx200.iface_initialized) {
-		net_if_down(wfx200.iface);
-		sl_wfx_context->state &= ~SL_WFX_STA_INTERFACE_CONNECTED;
-		LOG_INF("WiFi disconnected");
-		if (IS_ENABLED(CONFIG_WIFI_WFX200_AUTOCONNECT)) {
-			connect_to_selected_wifi();
-		}
+	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+
+	if (event == NULL) {
+		/* TODO */
+		return;
 	}
+
+	wfx200_0.sl_context.state &= ~SL_WFX_STA_INTERFACE_CONNECTED;
+	event->ev = WFX200_DISCONNECT_EVENT;
+	k_queue_append(&wfx200_0.event_queue, event);
+
+	LOG_INF("WiFi disconnected");
 }
 
 void sl_wfx_start_ap_callback(sl_wfx_start_ap_ind_t *start_ap)
 {
-	ARG_UNUSED(start_ap);
-	LOG_DBG("%s", __func__);
+	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+
+	if (event == NULL) {
+		/* TODO */
+		return;
+	}
+
+	if (start_ap->body.status == 0) {
+		LOG_INF("AP started");
+		wfx200_0.sl_context.state |= SL_WFX_AP_INTERFACE_UP;
+		event->ev = WFX200_AP_START_EVENT;
+	} else {
+		LOG_ERR("AP start failed(%d)", start_ap->body.status);
+		event->ev = WFX200_AP_START_FAILED_EVENT;
+	}
+	k_queue_append(&wfx200_0.event_queue, event);
 }
 
 void sl_wfx_stop_ap_callback(sl_wfx_stop_ap_ind_t *stop_ap)
 {
+	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+
 	ARG_UNUSED(stop_ap);
-	LOG_DBG("%s", __func__);
+
+	if (event == NULL) {
+		/* TODO */
+		return;
+	}
+
+	LOG_DBG("AP Stopped");
+	wfx200_0.sl_context.state &= ~SL_WFX_AP_INTERFACE_UP;
+	event->ev = WFX200_AP_STOP_EVENT;
+	k_queue_append(&wfx200_0.event_queue, event);
 }
 
 void sl_wfx_host_received_frame_callback(sl_wfx_received_ind_t *rx_buffer)
@@ -425,11 +442,27 @@ void sl_wfx_host_received_frame_callback(sl_wfx_received_ind_t *rx_buffer)
 	struct net_pkt *pkt;
 	int res;
 
-	if (wfx200.iface == NULL) {
-		LOG_ERR("network interface unavailable");
+	if (wfx200_0.iface == NULL) {
+		LOG_ERR("Network interface unavailable");
 		return;
 	}
-	pkt = net_pkt_rx_alloc_with_buffer(wfx200.iface, rx_buffer->body.frame_length,
+	if (!wfx200_0.iface_initialized) {
+		LOG_ERR("Network interface not initialized");
+		return;
+	}
+	if ((rx_buffer->header.info & SL_WFX_MSG_INFO_INTERFACE_MASK) ==
+	    (SL_WFX_STA_INTERFACE << SL_WFX_MSG_INFO_INTERFACE_OFFSET) &&
+	    wfx200_0.ap_mode) {
+		LOG_WRN("Got ethernet packet from sta interface in ap mode. Dropping packet...");
+		return;
+	}
+	if ((rx_buffer->header.info & SL_WFX_MSG_INFO_INTERFACE_MASK) ==
+	    (SL_WFX_SOFTAP_INTERFACE << SL_WFX_MSG_INFO_INTERFACE_OFFSET) &&
+	    !wfx200_0.ap_mode) {
+		LOG_WRN("Got ethernet packet from softap interface in sta mode. Dropping packet...");
+		return;
+	}
+	pkt = net_pkt_rx_alloc_with_buffer(wfx200_0.iface, rx_buffer->body.frame_length,
 					   AF_UNSPEC, 0, K_NO_WAIT);
 	if (!pkt) {
 		LOG_ERR("Failed to get net buffer");
@@ -440,11 +473,12 @@ void sl_wfx_host_received_frame_callback(sl_wfx_received_ind_t *rx_buffer)
 		LOG_ERR("Failed to write pkt");
 		goto pkt_unref;
 	}
-	if ((res = net_recv_data(wfx200.iface, pkt)) < 0) {
+	if ((res = net_recv_data(wfx200_0.iface, pkt)) < 0) {
 		LOG_ERR("Failed to push received data %d", res);
 		goto pkt_unref;
 	}
 	return;
+
 pkt_unref:
 	net_pkt_unref(pkt);
 	return;
@@ -452,37 +486,38 @@ pkt_unref:
 
 void sl_wfx_scan_result_callback(sl_wfx_scan_result_ind_t *scan_result)
 {
-	char ssid[33];
 	struct sl_wfx_scan_result_ind_body_s *body = &scan_result->body;
+	int rssi = (body->rcpi / 2) - 110;
+	struct wifi_scan_result wifi_scan_result = { 0 };
 
-	memcpy(ssid,
-	       body->ssid_def.ssid,
-	       MIN(sizeof(ssid), body->ssid_def.ssid_length));
-	ssid[body->ssid_def.ssid_length] = 0;
-
-	LOG_INF("%-32s\t%02x:%02x:%02x:%02x:%02x:%02x\t%d\t%s", log_strdup(ssid),
-		body->mac[0],
-		body->mac[1],
-		body->mac[2],
-		body->mac[3],
-		body->mac[4],
-		body->mac[5],
-		body->channel,
-		((body->security_mode.eap)?"EAP":((body->security_mode.psk)?"PSK":"None"))
-		);
-
-	if (IS_ENABLED(CONFIG_WIFI_WFX200_AUTOCONNECT) &&
-	    strcmp(ssid, CONFIG_WIFI_WFX200_SSID) == 0) {
-		found = true;
-		memcpy(&scanres, body, sizeof(scanres));
+	if (wfx200_0.iface_initialized && wfx200_0.scan_cb != NULL) {
+		memcpy(wifi_scan_result.ssid, body->ssid_def.ssid,
+		       MIN(sizeof(wifi_scan_result.ssid), body->ssid_def.ssid_length));
+		wifi_scan_result.channel = body->channel;
+		wifi_scan_result.rssi = rssi;
+		wifi_scan_result.security = body->security_mode.psk ?
+					    WIFI_SECURITY_TYPE_PSK :
+					    WIFI_SECURITY_TYPE_NONE;
+		wfx200_0.scan_cb(wfx200_0.iface, 0, &wifi_scan_result);
 	}
 }
 
 void sl_wfx_scan_complete_callback(sl_wfx_scan_complete_ind_t *scan_complete)
 {
 	ARG_UNUSED(scan_complete);
-	if (IS_ENABLED(CONFIG_WIFI_WFX200_AUTOCONNECT)) {
-		connect_to_selected_wifi();
+	if (wfx200_0.iface_initialized) {
+		if (scan_complete->body.status == 0) {
+			LOG_DBG("Scan complete");
+			if (wfx200_0.scan_cb != NULL) {
+				wfx200_0.scan_cb(wfx200_0.iface, 0, NULL);
+			}
+		} else {
+			LOG_WRN("Scan failed(%d)", scan_complete->body.status);
+			if (wfx200_0.scan_cb != NULL) {
+				wfx200_0.scan_cb(wfx200_0.iface, 1, NULL);
+			}
+		}
+		wfx200_0.scan_cb = NULL;
 	}
 }
 
@@ -494,8 +529,15 @@ void sl_wfx_generic_status_callback(sl_wfx_generic_ind_t *frame)
 
 void sl_wfx_ap_client_connected_callback(sl_wfx_ap_client_connected_ind_t *ap_client_connected)
 {
-	ARG_UNUSED(ap_client_connected);
-	LOG_DBG("%s", __func__);
+	struct sl_wfx_ap_client_connected_ind_body_s *body = &ap_client_connected->body;
+
+	LOG_INF("Client %02x:%02x:%02x:%02x:%02x:%02x connected to AP",
+		body->mac[0],
+		body->mac[1],
+		body->mac[2],
+		body->mac[3],
+		body->mac[4],
+		body->mac[5]);
 }
 
 void sl_wfx_ap_client_rejected_callback(sl_wfx_ap_client_rejected_ind_t *ap_client_rejected)
@@ -506,8 +548,15 @@ void sl_wfx_ap_client_rejected_callback(sl_wfx_ap_client_rejected_ind_t *ap_clie
 
 void sl_wfx_ap_client_disconnected_callback(sl_wfx_ap_client_disconnected_ind_t *ap_client_disconnected)
 {
-	ARG_UNUSED(ap_client_disconnected);
-	LOG_DBG("%s", __func__);
+	struct sl_wfx_ap_client_disconnected_ind_body_s *body = &ap_client_disconnected->body;
+
+	LOG_INF("Client %02x:%02x:%02x:%02x:%02x:%02x disconnected from AP",
+		body->mac[0],
+		body->mac[1],
+		body->mac[2],
+		body->mac[3],
+		body->mac[4],
+		body->mac[5]);
 }
 
 void sl_wfx_ext_auth_callback(sl_wfx_ext_auth_ind_t *ext_auth_indication)
@@ -528,6 +577,7 @@ sl_status_t sl_wfx_host_allocate_buffer(void **buffer,
 					uint32_t buffer_size)
 {
 	ARG_UNUSED(type);
+
 	if (buffer == NULL) {
 		return SL_STATUS_FAIL;
 	}
@@ -542,6 +592,7 @@ sl_status_t sl_wfx_host_allocate_buffer(void **buffer,
 sl_status_t sl_wfx_host_free_buffer(void *buffer, sl_wfx_buffer_type_t type)
 {
 	ARG_UNUSED(type);
+
 	if (buffer != NULL) {
 		k_free(buffer);
 	}
@@ -554,7 +605,7 @@ sl_status_t sl_wfx_host_free_buffer(void *buffer, sl_wfx_buffer_type_t type)
 sl_status_t sl_wfx_host_lock(void)
 {
 	/* Time taken from silabs sample code */
-	if (k_mutex_lock(&wfx200.bus_mutex, K_MSEC(500)) == -EAGAIN) {
+	if (k_mutex_lock(&wfx200_0.bus_mutex, K_MSEC(500)) == -EAGAIN) {
 		LOG_DBG("Wi-Fi driver mutex timeout");
 		return SL_STATUS_TIMEOUT;
 	}
@@ -563,7 +614,7 @@ sl_status_t sl_wfx_host_lock(void)
 
 sl_status_t sl_wfx_host_unlock(void)
 {
-	k_mutex_unlock(&wfx200.bus_mutex);
+	k_mutex_unlock(&wfx200_0.bus_mutex);
 	return SL_STATUS_OK;
 }
 
@@ -582,14 +633,14 @@ sl_status_t sl_wfx_host_deinit_bus(void)
 
 sl_status_t sl_wfx_host_enable_platform_interrupt(void)
 {
-	/* TODO: implement properly */
+	wfx200_enable_interrupt(&wfx200_0);
 	return SL_STATUS_OK;
 }
 
 sl_status_t sl_wfx_host_disable_platform_interrupt(void)
 
 {
-	/* TODO: implement properly */
+	wfx200_disable_interrupt(&wfx200_0);
 	return SL_STATUS_OK;
 }
 
@@ -639,12 +690,12 @@ sl_status_t sl_wfx_host_spi_transfer_no_cs_assert(sl_wfx_host_bus_transfer_type_
 		return SL_STATUS_FAIL;
 	}
 	if (type == SL_WFX_BUS_WRITE) {
-		if ((err = spi_write(wfx200.spi, &wfx200.spi_cfg, &tx)) < 0) {
+		if ((err = spi_write(wfx200_0.spi, &wfx200_0.spi_cfg, &tx)) < 0) {
 			LOG_ERR("spi_write fail: %d", err);
 			return SL_STATUS_FAIL;
 		}
 	} else {
-		if ((err = spi_transceive(wfx200.spi, &wfx200.spi_cfg, &tx, &rx)) < 0) {
+		if ((err = spi_transceive(wfx200_0.spi, &wfx200_0.spi_cfg, &tx, &rx)) < 0) {
 			LOG_ERR("spi_transceive fail: %d", err);
 			return SL_STATUS_FAIL;
 		}
@@ -690,11 +741,13 @@ sl_status_t sl_wfx_host_sdio_enable_high_speed_mode(void)
 
 void sl_wfx_host_log(const char *string, ...)
 {
-	va_list args;
+	if (IS_ENABLED(WIFI_WFX200_VERBOSE_DEBUG)) {
+		va_list args;
 
-	va_start(args, string);
-	log_printk(string, args);
-	va_end(args);
+		va_start(args, string);
+		log_printk(string, args);
+		va_end(args);
+	}
 }
 
 /**

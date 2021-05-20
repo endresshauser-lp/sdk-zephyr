@@ -14,14 +14,35 @@
 #include <drivers/gpio.h>
 #include <drivers/spi.h>
 #include <net/ethernet.h>
+#include <net/wifi_mgmt.h>
+
 #include <sl_wfx_constants.h>
+
+enum wfx200_event {
+	WFX200_CONNECT_EVENT = 0,
+	WFX200_CONNECT_FAILED_EVENT,
+	WFX200_DISCONNECT_EVENT,
+	WFX200_AP_START_EVENT,
+	WFX200_AP_START_FAILED_EVENT,
+	WFX200_AP_STOP_EVENT,
+};
+
+struct wfx200_queue_event {
+	enum wfx200_event ev;
+	union {
+
+	};
+};
 
 struct wfx200_gpio {
 	const struct device *dev;
-	unsigned int pin;
+	uint8_t pin;
 };
 
 struct wfx200_dev {
+	struct net_if *iface;
+	const struct device *dev;
+
 	const struct device *spi;
 	struct spi_config spi_cfg;
 	struct spi_cs_control cs_ctrl;
@@ -31,6 +52,7 @@ struct wfx200_dev {
 	struct wfx200_gpio interrupt;
 	struct wfx200_gpio reset;
 	struct wfx200_gpio wakeup;
+	struct wfx200_gpio hif_sel;
 
 	struct k_sem wakeup_sem;
 	struct k_sem event_sem;
@@ -42,17 +64,49 @@ struct wfx200_dev {
 
 	struct gpio_callback int_cb;
 
-	struct k_work_q work_q;
-	struct k_work work;
-
-	struct net_if *iface;
-	// uint8_t mac_address[6];
+	scan_result_cb_t scan_cb;
 
 	sl_wfx_context_t sl_context;
 
 	bool iface_initialized : 1;
+	bool ap_mode : 1;
+
+	struct k_work_q incoming_work_q;
+	struct k_work incoming_work;
+
+	struct k_queue event_queue;
+	struct k_thread event_thread;
+
+	K_KERNEL_STACK_MEMBER(wfx200_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
+	K_KERNEL_STACK_MEMBER(wfx200_event_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
 };
 
-extern struct wfx200_dev wfx200;
+struct wfx200_gpio_config {
+	const char *port;
+	uint8_t pin;
+	gpio_dt_flags_t flags;
+};
+
+#define WFX200_INIT_GPIO_CONFIG(_inst, _name) {		   \
+		.port = DT_INST_GPIO_LABEL(_inst, _name),  \
+		.pin = DT_INST_GPIO_PIN(_inst, _name),	   \
+		.flags = DT_INST_GPIO_FLAGS(_inst, _name), \
+}
+
+struct wfx200_config {
+	struct wfx200_gpio_config interrupt;
+	struct wfx200_gpio_config reset;
+	struct wfx200_gpio_config wakeup;
+	struct wfx200_gpio_config hif_select;
+	struct wfx200_gpio_config spi_cs;
+	const char *spi_port;
+	uint32_t spi_freq;
+	uint8_t spi_slave;
+};
+
+void wfx200_enable_interrupt(struct wfx200_dev *context);
+void wfx200_disable_interrupt(struct wfx200_dev *context);
+
+void wfx200_event_thread(void *p1, void *p2, void *p3);
 
 #endif /* __ZEPHYR_SILABS_WFX200_INTERNAL_H_ */
