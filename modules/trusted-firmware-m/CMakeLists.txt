@@ -17,6 +17,7 @@ set(TFM_VALID_PARTITIONS
 # List of all crypto modules that can be enabled/disabled
 # Corresponds to the *_MODULE_DISABLED configs in 'trusted-firmware-m/config/config_default.cmake'
 set(TFM_CRYPTO_MODULES
+  CRYPTO_RNG_MODULE
   CRYPTO_KEY_MODULE
   CRYPTO_AEAD_MODULE
   CRYPTO_MAC_MODULE
@@ -103,6 +104,10 @@ function(trusted_firmware_build)
     set(TFM_IPC_ARG -DTFM_PSA_API=ON)
     # PSA API awareness for the Non-Secure application
     target_compile_definitions(app PRIVATE "TFM_PSA_API")
+  endif()
+
+  if(TFM_ISOLATION_LEVEL)
+    set(TFM_ISOLATION_LEVEL_ARG -DTFM_ISOLATION_LEVEL=${TFM_ISOLATION_LEVEL})
   endif()
 
   if (TFM_REGRESSION_S)
@@ -224,12 +229,22 @@ function(trusted_firmware_build)
 
   include(ExternalProject)
 
+  if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL Windows)
+    # Set number of parallel jobs for TF-M build to 1.
+    # In some circumstances it has been experienced that building TF-M with
+    # multiple parallel jobs then `permission denied` may occur. Root cause on
+    # Windows has not been identified but current suspicion is around folder /
+    # file lock mechanism. To ensure correct behaviour in all cases, limit
+    # number of parallel jobs to 1.
+    set(PARALLEL_JOBS -j 1)
+  endif()
+
   ExternalProject_Add(
     tfm
     SOURCE_DIR ${ZEPHYR_TRUSTED_FIRMWARE_M_MODULE_DIR}/trusted-firmware-m
     BINARY_DIR ${TFM_BINARY_DIR}
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND ${CMAKE_COMMAND} --build .
+    BUILD_COMMAND ${CMAKE_COMMAND} --build . ${PARALLEL_JOBS}
     INSTALL_COMMAND ${CMAKE_COMMAND} --install .
     BUILD_ALWAYS True
     USES_TERMINAL_BUILD True
@@ -422,13 +437,21 @@ if (CONFIG_BUILD_WITH_TFM)
   set(NS_SIGNED_FILE ${CMAKE_BINARY_DIR}/zephyr_ns_signed.hex)
   set(S_SIGNED_FILE ${CMAKE_BINARY_DIR}/tfm_s_signed.hex)
 
+  if (CONFIG_TFM_REGRESSION_NS)
+    # Use the TF-M NS binary as the Non-Secure application firmware image
+    set(NS_APP_FILE $<TARGET_PROPERTY:tfm,TFM_NS_HEX_FILE>)
+  else()
+    # Use the Zephyr binary as the Non-Secure application firmware image
+    set(NS_APP_FILE ${CMAKE_BINARY_DIR}/zephyr/${KERNEL_HEX_NAME})
+  endif()
+
   if (NOT CONFIG_TFM_BL2)
     # Merge tfm_s and zephyr (NS) image to a single binary.
     set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
       COMMAND ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/mergehex.py
         -o ${MERGED_FILE}
         $<TARGET_PROPERTY:tfm,TFM_S_HEX_FILE>
-        ${CMAKE_BINARY_DIR}/zephyr/${KERNEL_HEX_NAME}
+        ${NS_APP_FILE}
     )
 
     set_property(GLOBAL APPEND PROPERTY extra_post_build_byproducts
@@ -437,12 +460,6 @@ if (CONFIG_BUILD_WITH_TFM)
 
   elseif(CONFIG_TFM_MCUBOOT_IMAGE_NUMBER STREQUAL "1")
     tfm_sign(sign_cmd NS TRUE ${S_NS_FILE} ${S_NS_SIGNED_FILE})
-
-    if (CONFIG_TFM_REGRESSION_NS)
-      set(NS_APP_FILE $<TARGET_PROPERTY:tfm,TFM_NS_HEX_FILE>)
-    else()
-      set(NS_APP_FILE ${CMAKE_BINARY_DIR}/zephyr/${KERNEL_HEX_NAME})
-    endif()
 
     set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
       COMMAND ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/mergehex.py
@@ -466,9 +483,9 @@ if (CONFIG_BUILD_WITH_TFM)
 
   else()
     if (CONFIG_TFM_REGRESSION_NS)
-      tfm_sign(sign_cmd_ns NS TRUE $<TARGET_PROPERTY:tfm,TFM_NS_HEX_FILE> ${NS_SIGNED_FILE})
+      tfm_sign(sign_cmd_ns NS TRUE ${NS_APP_FILE} ${NS_SIGNED_FILE})
     else()
-      tfm_sign(sign_cmd_ns NS FALSE ${CMAKE_BINARY_DIR}/zephyr/${KERNEL_HEX_NAME} ${NS_SIGNED_FILE})
+      tfm_sign(sign_cmd_ns NS FALSE ${NS_APP_FILE} ${NS_SIGNED_FILE})
     endif()
 
     tfm_sign(sign_cmd_s S TRUE $<TARGET_PROPERTY:tfm,TFM_S_HEX_FILE> ${S_SIGNED_FILE})
