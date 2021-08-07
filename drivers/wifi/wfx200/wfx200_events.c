@@ -32,7 +32,7 @@ void wfx200_event_thread(void *p1, void *p2, void *p3)
 
 		switch (event->ev) {
 		case WFX200_CONNECT_EVENT:
-			if (!context->ap_mode) {
+			if (context->state == WFX200_STATE_STA_MODE) {
 				net_if_set_link_addr(context->iface, context->sl_context.mac_addr_0.octet,
 						     sizeof(context->sl_context.mac_addr_0.octet),
 						     NET_LINK_ETHERNET);
@@ -54,19 +54,20 @@ void wfx200_event_thread(void *p1, void *p2, void *p3)
 			}
 			break;
 		case WFX200_CONNECT_FAILED_EVENT:
-			if (!context->ap_mode) {
+			if (context->state == WFX200_STATE_STA_MODE) {
 				wifi_mgmt_raise_connect_result_event(context->iface, 1);
+				context->state = WFX200_STATE_INTERFACE_INITIALIZED;
 			}
 			break;
 		case WFX200_DISCONNECT_EVENT:
-			if (!context->ap_mode) {
+			if (context->state == WFX200_STATE_STA_MODE) {
 				net_eth_carrier_off(context->iface);
 				wifi_mgmt_raise_disconnect_result_event(context->iface, 0);
+				context->state = WFX200_STATE_INTERFACE_INITIALIZED;
 			}
 			break;
 		case WFX200_AP_START_EVENT:
-			if (!(context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED)) {
-				context->ap_mode = 1;
+			if (context->state == WFX200_STATE_AP_MODE) {
 				net_if_set_link_addr(context->iface, context->sl_context.mac_addr_1.octet,
 						     sizeof(context->sl_context.mac_addr_1.octet),
 						     NET_LINK_ETHERNET);
@@ -86,11 +87,14 @@ void wfx200_event_thread(void *p1, void *p2, void *p3)
 			}
 			break;
 		case WFX200_AP_START_FAILED_EVENT:
+			if (context->state == WFX200_STATE_AP_MODE) {
+				context->state = WFX200_STATE_INTERFACE_INITIALIZED;
+			}
 			break;
 		case WFX200_AP_STOP_EVENT:
-			if (context->ap_mode) {
+			if (context->state == WFX200_STATE_AP_MODE) {
 				net_eth_carrier_off(context->iface);
-				context->ap_mode = 0;
+				context->state = WFX200_STATE_INTERFACE_INITIALIZED;
 			}
 			if (IS_ENABLED(CONFIG_WIFI_WFX200_SLEEP) &&
 			    context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED) {

@@ -446,22 +446,24 @@ void sl_wfx_host_received_frame_callback(sl_wfx_received_ind_t *rx_buffer)
 		LOG_ERR("Network interface unavailable");
 		return;
 	}
-	if (!wfx200_0.iface_initialized) {
+	switch (wfx200_0.state) {
+	case WFX200_STATE_STA_MODE:
+		if ((rx_buffer->header.info & SL_WFX_MSG_INFO_INTERFACE_MASK) ==
+		    (SL_WFX_SOFTAP_INTERFACE << SL_WFX_MSG_INFO_INTERFACE_OFFSET)) {
+			LOG_WRN("Got ethernet packet from softap interface in sta mode. Dropping packet...");
+			return;
+		}
+		break;
+	case WFX200_STATE_AP_MODE:
+		if ((rx_buffer->header.info & SL_WFX_MSG_INFO_INTERFACE_MASK) ==
+		    (SL_WFX_STA_INTERFACE << SL_WFX_MSG_INFO_INTERFACE_OFFSET)) {
+			LOG_WRN("Got ethernet packet from sta interface in ap mode. Dropping packet...");
+			return;
+		}
+	default:
 		LOG_ERR("Network interface not initialized");
-		return;
 	}
-	if ((rx_buffer->header.info & SL_WFX_MSG_INFO_INTERFACE_MASK) ==
-	    (SL_WFX_STA_INTERFACE << SL_WFX_MSG_INFO_INTERFACE_OFFSET) &&
-	    wfx200_0.ap_mode) {
-		LOG_WRN("Got ethernet packet from sta interface in ap mode. Dropping packet...");
-		return;
-	}
-	if ((rx_buffer->header.info & SL_WFX_MSG_INFO_INTERFACE_MASK) ==
-	    (SL_WFX_SOFTAP_INTERFACE << SL_WFX_MSG_INFO_INTERFACE_OFFSET) &&
-	    !wfx200_0.ap_mode) {
-		LOG_WRN("Got ethernet packet from softap interface in sta mode. Dropping packet...");
-		return;
-	}
+
 	pkt = net_pkt_rx_alloc_with_buffer(wfx200_0.iface, rx_buffer->body.frame_length,
 					   AF_UNSPEC, 0, K_NO_WAIT);
 	if (!pkt) {
@@ -490,35 +492,39 @@ void sl_wfx_scan_result_callback(sl_wfx_scan_result_ind_t *scan_result)
 	int rssi = (body->rcpi / 2) - 110;
 	struct wifi_scan_result wifi_scan_result = { 0 };
 
-	if (wfx200_0.iface_initialized && wfx200_0.scan_cb != NULL) {
-		memcpy(wifi_scan_result.ssid, body->ssid_def.ssid,
-		       MIN(sizeof(wifi_scan_result.ssid), body->ssid_def.ssid_length));
-		wifi_scan_result.channel = body->channel;
-		wifi_scan_result.rssi = rssi;
-		wifi_scan_result.security = body->security_mode.psk ?
-					    WIFI_SECURITY_TYPE_PSK :
-					    WIFI_SECURITY_TYPE_NONE;
-		wfx200_0.scan_cb(wfx200_0.iface, 0, &wifi_scan_result);
+	if (wfx200_0.state < WFX200_STATE_INTERFACE_INITIALIZED ||
+	    wfx200_0.scan_cb == NULL) {
+		return;
 	}
+	memcpy(wifi_scan_result.ssid, body->ssid_def.ssid,
+	       MIN(sizeof(wifi_scan_result.ssid), body->ssid_def.ssid_length));
+	wifi_scan_result.channel = body->channel;
+	wifi_scan_result.rssi = rssi;
+	wifi_scan_result.security = body->security_mode.psk ?
+				    WIFI_SECURITY_TYPE_PSK :
+				    WIFI_SECURITY_TYPE_NONE;
+	wfx200_0.scan_cb(wfx200_0.iface, 0, &wifi_scan_result);
 }
 
 void sl_wfx_scan_complete_callback(sl_wfx_scan_complete_ind_t *scan_complete)
 {
 	ARG_UNUSED(scan_complete);
-	if (wfx200_0.iface_initialized) {
-		if (scan_complete->body.status == 0) {
-			LOG_DBG("Scan complete");
-			if (wfx200_0.scan_cb != NULL) {
-				wfx200_0.scan_cb(wfx200_0.iface, 0, NULL);
-			}
-		} else {
-			LOG_WRN("Scan failed(%d)", scan_complete->body.status);
-			if (wfx200_0.scan_cb != NULL) {
-				wfx200_0.scan_cb(wfx200_0.iface, 1, NULL);
-			}
-		}
-		wfx200_0.scan_cb = NULL;
+
+	if (wfx200_0.state < WFX200_STATE_INTERFACE_INITIALIZED) {
+		return;
 	}
+	if (scan_complete->body.status == 0) {
+		LOG_DBG("Scan complete");
+		if (wfx200_0.scan_cb != NULL) {
+			wfx200_0.scan_cb(wfx200_0.iface, 0, NULL);
+		}
+	} else {
+		LOG_WRN("Scan failed(%d)", scan_complete->body.status);
+		if (wfx200_0.scan_cb != NULL) {
+			wfx200_0.scan_cb(wfx200_0.iface, 1, NULL);
+		}
+	}
+	wfx200_0.scan_cb = NULL;
 }
 
 void sl_wfx_generic_status_callback(sl_wfx_generic_ind_t *frame)
