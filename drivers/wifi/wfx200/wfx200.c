@@ -43,7 +43,7 @@ static void wfx200_iface_init(struct net_if *iface)
 			     sizeof(context->sl_context.mac_addr_0.octet),
 			     NET_LINK_ETHERNET);
 	ethernet_init(iface);
-	context->iface_initialized = true;
+	context->state = WFX200_STATE_INTERFACE_INITIALIZED;
 	net_if_flag_set(iface, NET_IF_NO_AUTO_START);
 }
 
@@ -55,14 +55,19 @@ int wfx200_send(const struct device *dev, struct net_pkt *pkt)
 	sl_status_t result;
 	int status;
 
-	if (context->ap_mode) {
+	switch (context->state) {
+	case WFX200_STATE_AP_MODE:
 		if (!(context->sl_context.state & SL_WFX_AP_INTERFACE_UP)) {
 			return -EIO;
 		}
-	} else {
+		break;
+	case WFX200_STATE_STA_MODE:
 		if (!(context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED)) {
 			return -EIO;
 		}
+		break;
+	default:
+		return -ENODEV;
 	}
 	frame_len = SL_WFX_ROUND_UP(len, 2);
 	result = sl_wfx_allocate_command_buffer((sl_wfx_generic_message_t **)&tx_buffer,
@@ -76,10 +81,18 @@ int wfx200_send(const struct device *dev, struct net_pkt *pkt)
 		status = -EIO;
 		goto error;
 	}
-	result = sl_wfx_send_ethernet_frame(tx_buffer,
-					    frame_len,
-					    context->ap_mode?SL_WFX_SOFTAP_INTERFACE:SL_WFX_STA_INTERFACE,
-					    WFM_PRIORITY_BE0);
+	if (context->state == WFX200_STATE_AP_MODE) {
+		result = sl_wfx_send_ethernet_frame(tx_buffer,
+						    frame_len,
+						    SL_WFX_SOFTAP_INTERFACE,
+						    WFM_PRIORITY_BE0);
+	} else {
+		result = sl_wfx_send_ethernet_frame(tx_buffer,
+						    frame_len,
+						    SL_WFX_STA_INTERFACE,
+						    WFM_PRIORITY_BE0);
+	}
+
 	if (result != SL_STATUS_OK) {
 		status = -EIO;
 		goto error;
@@ -102,7 +115,7 @@ int wfx200_scan(const struct device *dev, scan_result_cb_t cb)
 	struct wfx200_dev *context = dev->data;
 	sl_status_t result;
 
-	if (!context->iface_initialized) {
+	if (context->state < WFX200_STATE_INTERFACE_INITIALIZED) {
 		return -EIO;
 	}
 	if (context->scan_cb != NULL) {
@@ -132,16 +145,16 @@ int wfx200_connect(const struct device *dev, struct wifi_connect_req_params *par
 	sl_status_t result;
 	uint16_t channel;
 
-	if (!context->iface_initialized) {
+	switch (context->state) {
+	case WFX200_STATE_INTERFACE_INITIALIZED:
+		break;
+	case WFX200_STATE_AP_MODE:
+		return -EBUSY;
+	case WFX200_STATE_STA_MODE:
+		return -EALREADY;
+	default:
 		return -ENODEV;
 	}
-	if ((context->sl_context.state & SL_WFX_AP_INTERFACE_UP) || context->ap_mode) {
-		return -EBUSY;
-	}
-	if (context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED) {
-		return -EALREADY;
-	}
-
 	memcpy(ssid, params->ssid, MIN(params->ssid_length, sizeof(ssid)));
 	ssid[MIN(params->ssid_length, WIFI_SSID_MAX_LEN)] = 0;
 
@@ -177,6 +190,7 @@ int wfx200_connect(const struct device *dev, struct wifi_connect_req_params *par
 	if (result != SL_STATUS_OK) {
 		return -EIO;
 	}
+	context->state = WFX200_STATE_STA_MODE;
 
 	return 0;
 }
@@ -186,21 +200,15 @@ int wfx200_disconnect(const struct device *dev)
 	struct wfx200_dev *context = dev->data;
 	sl_status_t result;
 
-	if (!context->iface_initialized) {
+	if (context->state < WFX200_STATE_INTERFACE_INITIALIZED) {
 		return -ENODEV;
 	}
-	if (!context->iface_initialized || context->ap_mode) {
-		return -EBUSY;
+	if (context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED) {
+		result = sl_wfx_send_disconnect_command();
+		if (result != SL_STATUS_OK) {
+			return -EIO;
+		}
 	}
-	if (!(context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED)) {
-		return 0;
-	}
-
-	result = sl_wfx_send_disconnect_command();
-	if (result != SL_STATUS_OK) {
-		return -EIO;
-	}
-
 	return 0;
 }
 
@@ -209,14 +217,15 @@ int wfx200_ap_enable(const struct device *dev, struct wifi_connect_req_params *p
 	struct wfx200_dev *context = dev->data;
 	sl_wfx_status_t result;
 
-	if (!context->iface_initialized) {
-		return -ENODEV;
-	}
-	if (context->sl_context.state & SL_WFX_STA_INTERFACE_CONNECTED) {
+	switch (context->state) {
+	case WFX200_STATE_INTERFACE_INITIALIZED:
+		break;
+	case WFX200_STATE_STA_MODE:
 		return -EBUSY;
-	}
-	if (context->sl_context.state & SL_WFX_AP_INTERFACE_UP) {
+	case WFX200_STATE_AP_MODE:
 		return -EALREADY;
+	default:
+		return -ENODEV;
 	}
 	if (params->channel < 1 || params->channel > 14) {
 		return -ERANGE;
@@ -256,6 +265,7 @@ int wfx200_ap_enable(const struct device *dev, struct wifi_connect_req_params *p
 	if (result != SL_STATUS_OK) {
 		return -EIO;
 	}
+	context->state = WFX200_STATE_AP_MODE;
 
 	return 0;
 }
@@ -265,16 +275,14 @@ int wfx200_ap_disable(const struct device *dev)
 	struct wfx200_dev *context = dev->data;
 	sl_status_t result;
 
-	if (!context->iface_initialized) {
+	if (context->state < WFX200_STATE_INTERFACE_INITIALIZED) {
 		return -ENODEV;
 	}
-	if (!(context->sl_context.state & SL_WFX_AP_INTERFACE_UP)) {
-		return 0;
-	}
-
-	result = sl_wfx_stop_ap_command();
-	if (result != SL_STATUS_OK) {
-		return -EIO;
+	if (context->sl_context.state & SL_WFX_AP_INTERFACE_UP) {
+		result = sl_wfx_stop_ap_command();
+		if (result != SL_STATUS_OK) {
+			return -EIO;
+		}
 	}
 
 	return 0;
@@ -344,6 +352,7 @@ static int wfx200_init(const struct device *dev)
 	struct wfx200_dev *context = dev->data;
 
 	context->dev = dev;
+	context->state = WFX200_STATE_IDLE;
 
 	LOG_INF("Initializing WFX200 Driver, using FMAC Driver Version %s", FMAC_DRIVER_VERSION_STRING);
 
