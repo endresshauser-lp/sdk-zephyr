@@ -39,6 +39,14 @@ struct wfx200_gpio {
 	uint8_t pin;
 };
 
+enum wfx200_state {
+	WFX200_STATE_IDLE = 0,
+	WFX200_STATE_INITIALIZED,
+	WFX200_STATE_INTERFACE_INITIALIZED,
+	WFX200_STATE_AP_MODE,
+	WFX200_STATE_STA_MODE,
+};
+
 struct wfx200_dev {
 	struct net_if *iface;
 	const struct device *dev;
@@ -68,8 +76,7 @@ struct wfx200_dev {
 
 	sl_wfx_context_t sl_context;
 
-	bool iface_initialized : 1;
-	bool ap_mode : 1;
+	enum wfx200_state state;
 
 	struct k_work_q incoming_work_q;
 	struct k_work incoming_work;
