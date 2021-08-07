@@ -110,6 +110,13 @@ error:
 	return status;
 }
 
+static enum ethernet_hw_caps wfx200_get_capabilities(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return 0;
+}
+
 int wfx200_scan(const struct device *dev, scan_result_cb_t cb)
 {
 	struct wfx200_dev *context = dev->data;
@@ -292,6 +299,7 @@ static const struct net_wifi_mgmt api_funcs = {
 	.eth_api = {
 		.iface_api.init = wfx200_iface_init,
 		.send = wfx200_send,
+		.get_capabilities = wfx200_get_capabilities,
 	},
 	.scan = wfx200_scan,
 	.connect = wfx200_connect,
