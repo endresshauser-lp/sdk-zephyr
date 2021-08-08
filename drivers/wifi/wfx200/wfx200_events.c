@@ -112,7 +112,7 @@ void wfx200_event_thread(void *p1, void *p2, void *p3)
 			break;
 		}
 
-		k_free(event);
+		k_heap_free(&context->heap, event);
 		event = NULL;
 	}
 }
