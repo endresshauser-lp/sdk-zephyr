@@ -86,6 +86,9 @@ struct wfx200_dev {
 
 	K_KERNEL_STACK_MEMBER(wfx200_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
 	K_KERNEL_STACK_MEMBER(wfx200_event_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
+
+	struct k_heap heap;
+	char heap_buffer[CONFIG_WIFI_WFX200_HEAP_SIZE];
 };
 
 struct wfx200_gpio_config {

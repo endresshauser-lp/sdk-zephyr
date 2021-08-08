@@ -347,7 +347,8 @@ sl_status_t sl_wfx_host_post_event(sl_wfx_generic_message_t *event_payload)
 /* WFX host callbacks */
 void sl_wfx_connect_callback(sl_wfx_connect_ind_t *connect)
 {
-	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+	struct wfx200_queue_event *event = k_heap_alloc(&wfx200_0.heap,
+							sizeof(struct wfx200_queue_event), K_NO_WAIT);
 
 	if (event == NULL) {
 		/* TODO */
@@ -386,7 +387,8 @@ void sl_wfx_connect_callback(sl_wfx_connect_ind_t *connect)
 void sl_wfx_disconnect_callback(sl_wfx_disconnect_ind_t *disconnect)
 {
 	ARG_UNUSED(disconnect);
-	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+	struct wfx200_queue_event *event = k_heap_alloc(&wfx200_0.heap,
+							sizeof(struct wfx200_queue_event), K_NO_WAIT);
 
 	if (event == NULL) {
 		/* TODO */
@@ -402,7 +404,8 @@ void sl_wfx_disconnect_callback(sl_wfx_disconnect_ind_t *disconnect)
 
 void sl_wfx_start_ap_callback(sl_wfx_start_ap_ind_t *start_ap)
 {
-	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+	struct wfx200_queue_event *event = k_heap_alloc(&wfx200_0.heap,
+							sizeof(struct wfx200_queue_event), K_NO_WAIT);
 
 	if (event == NULL) {
 		/* TODO */
@@ -422,7 +425,8 @@ void sl_wfx_start_ap_callback(sl_wfx_start_ap_ind_t *start_ap)
 
 void sl_wfx_stop_ap_callback(sl_wfx_stop_ap_ind_t *stop_ap)
 {
-	struct wfx200_queue_event *event = k_malloc(sizeof(struct wfx200_queue_event));
+	struct wfx200_queue_event *event = k_heap_alloc(&wfx200_0.heap,
+							sizeof(struct wfx200_queue_event), K_NO_WAIT);
 
 	ARG_UNUSED(stop_ap);
 
@@ -571,13 +575,6 @@ void sl_wfx_ext_auth_callback(sl_wfx_ext_auth_ind_t *ext_auth_indication)
 	LOG_DBG("%s", __func__);
 }
 
-/**
- * Functions to allocate Memory
- */
-#if CONFIG_HEAP_MEM_POOL_SIZE < 2048
-#error "WFX200: please allow for at least 2k kernel memory heap"
-#endif
-
 sl_status_t sl_wfx_host_allocate_buffer(void **buffer,
 					sl_wfx_buffer_type_t type,
 					uint32_t buffer_size)
@@ -587,7 +584,7 @@ sl_status_t sl_wfx_host_allocate_buffer(void **buffer,
 	if (buffer == NULL) {
 		return SL_STATUS_FAIL;
 	}
-	*buffer = k_malloc(buffer_size);
+	*buffer = k_heap_alloc(&wfx200_0.heap, buffer_size, K_NO_WAIT);
 	if (*buffer == NULL) {
 		LOG_ERR("Failed to allocate %d bytes", buffer_size);
 		return SL_STATUS_ALLOCATION_FAILED;
@@ -600,7 +597,7 @@ sl_status_t sl_wfx_host_free_buffer(void *buffer, sl_wfx_buffer_type_t type)
 	ARG_UNUSED(type);
 
 	if (buffer != NULL) {
-		k_free(buffer);
+		k_heap_free(&wfx200_0.heap, buffer);
 	}
 	return SL_STATUS_OK;
 }
