@@ -7,7 +7,6 @@ menuconfig WIFI_WFX200
     select HAS_SILABS_WFX_FMAC
 	depends on NET_L2_WIFI_MGMT
 	depends on WIFI_OFFLOAD
-    depends on KERNEL_MEM_POOL
     depends on NET_L2_ETHERNET
     help
       SiLabs WFX200 WiFi Module with SPI
@@ -37,6 +36,10 @@ config WIFI_WFX200_VERBOSE_DEBUG
 config WIFI_WFX200_STACK_SIZE
     int "Driver task stack size"
     default 2048
+
+config WIFI_WFX200_HEAP_SIZE
+    int "Driver heap size"
+    default 4096
 
 config WIFI_WFX200_PRIORITY
     int "Driver task priority"
