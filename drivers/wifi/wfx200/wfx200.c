@@ -370,6 +370,8 @@ static int wfx200_init(const struct device *dev)
 	k_mutex_init(&context->bus_mutex);
 	k_mutex_init(&context->event_mutex);
 
+	k_heap_init(&context->heap, context->heap_buffer, CONFIG_WIFI_WFX200_HEAP_SIZE);
+
 	context->reset.dev = device_get_binding(config->reset.port);
 	if (!context->reset.dev) {
 		LOG_ERR("Failed to initialize GPIO driver: %s",
