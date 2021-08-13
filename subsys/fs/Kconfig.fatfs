@@ -57,6 +57,19 @@ config FS_FATFS_NUM_DIRS
 	int "Maximum number of opened directories"
 	default 4
 
+config FAT_FILESYSTEM_EARLY_INIT
+	bool "Initialize FAT driver with POST_KERNEL runlevel."
+	select DISK_ACCESS
+	default n
+
+if FAT_FILESYSTEM_EARLY_INIT
+
+config FAT_FILESYSTEM_EARLY_INIT_PRIORITY
+	int "Early init priority of custom FAT driver."
+	default 50
+
+endif # FAT_FILESYSTEM_EARLY_INIT
+
 config FS_FATFS_LFN
 	bool "Enable long filenames (LFN)"
 	help
