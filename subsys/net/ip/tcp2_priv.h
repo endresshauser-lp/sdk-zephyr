@@ -45,7 +45,7 @@
 #define tcp_free(_ptr) k_free(_ptr)
 #endif
 
-#define TCP_PKT_ALLOC_TIMEOUT K_MSEC(1000)
+#define TCP_PKT_ALLOC_TIMEOUT K_MSEC(100)
 
 #if defined(CONFIG_NET_TEST_PROTOCOL)
 #define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, tp_basename(__FILE__), __LINE__)
