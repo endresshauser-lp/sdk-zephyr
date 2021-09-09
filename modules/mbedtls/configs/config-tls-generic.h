@@ -30,8 +30,8 @@
 
 /* If we build with POSIX API, automatically use time(), etc. */
 #if defined(CONFIG_POSIX_API)
-//#define MBEDTLS_HAVE_TIME
-//#define MBEDTLS_HAVE_TIME_DATE
+#define MBEDTLS_HAVE_TIME
+#define MBEDTLS_HAVE_TIME_DATE
 #endif
 
 #if defined(CONFIG_MBEDTLS_TEST)
@@ -485,6 +485,8 @@
 #define MBEDTLS_ECDSA_C
 #define MBEDTLS_ECDH_C
 #define MBEDTLS_X509_CREATE_C
+// For time
+#define MBEDTLS_PLATFORM_TIME_ALT
 #include "mbedtls/check_config.h"
 
 #endif /* MBEDTLS_CONFIG_H */
