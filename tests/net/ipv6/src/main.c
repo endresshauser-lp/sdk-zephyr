@@ -423,7 +423,7 @@ static void test_cmp_prefix(void)
 static void test_add_neighbor(void)
 {
 	struct net_nbr *nbr;
-	struct net_linkaddr_storage llstorage;
+	struct net_linkaddr llstorage;
 	struct net_linkaddr lladdr;
 
 	llstorage.addr[0] = 0x01;
@@ -451,7 +451,7 @@ static void test_add_max_neighbors(void)
 	struct in6_addr dst_addr = { { { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0,
 					 0, 0, 0, 0, 0, 0, 0, 0x3 } } };
 	struct net_nbr *nbr;
-	struct net_linkaddr_storage llstorage;
+	struct net_linkaddr llstorage;
 	struct net_linkaddr lladdr;
 	uint8_t i;
 
@@ -1012,7 +1012,7 @@ static void test_address_lifetime(void)
 static void test_change_ll_addr(void)
 {
 	static uint8_t new_mac[] = { 00, 01, 02, 03, 04, 05 };
-	struct net_linkaddr_storage *ll;
+	struct net_linkaddr *ll;
 	struct net_linkaddr *ll_iface;
 	struct in6_addr dst;
 	struct net_if *iface;

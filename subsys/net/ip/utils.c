@@ -920,3 +920,25 @@ const struct in6_addr *net_ipv6_unspecified_address(void)
 {
 	return &in6addr_any;
 }
+
+const struct net_linkaddr *net_linkaddr_eth_unspecified_address(void)
+{
+	static const struct net_linkaddr lladdr = {
+		.type = NET_LINK_ETHERNET,
+		.len = 6,
+		.addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	};
+
+	return &lladdr;
+}
+
+const struct net_linkaddr *net_linkaddr_eth_broadcast_address(void)
+{
+	static const struct net_linkaddr lladdr = {
+		.type = NET_LINK_ETHERNET,
+		.len = 6,
+		.addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	};
+
+	return &lladdr;
+}

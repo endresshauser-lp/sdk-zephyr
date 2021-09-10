@@ -67,27 +67,6 @@ enum net_link_type {
  *  Used to hold the link address information
  */
 struct net_linkaddr {
-	/** The array of byte representing the address */
-	uint8_t *addr;
-
-	/** Length of that address array */
-	uint8_t len;
-
-	/** What kind of address is this for */
-	uint8_t type;
-};
-
-/**
- *  @brief Hardware link address structure
- *
- *  Used to hold the link address information. This variant is needed
- *  when we have to store the link layer address.
- *
- *  Note that you cannot cast this to net_linkaddr as uint8_t * is
- *  handled differently than uint8_t addr[] and the fields are purposely
- *  in different order.
- */
-struct net_linkaddr_storage {
 	/** What kind of address is this for */
 	uint8_t type;
 
@@ -97,6 +76,22 @@ struct net_linkaddr_storage {
 	/** The array of bytes representing the address */
 	uint8_t addr[NET_LINK_ADDR_MAX_LENGTH];
 };
+
+/**
+ *  @def net_linkaddr_copy
+ *  @brief Copy Link address
+ *
+ *  @param dest Destination Link address.
+ *  @param src Source Link address.
+ *
+ *  @return Destination address.
+ */
+#define net_linkaddr_copy(dest, src) \
+	UNALIGNED_PUT(UNALIGNED_GET(src), dest)
+
+const struct net_linkaddr *net_linkaddr_eth_unspecified_address(void);
+
+const struct net_linkaddr *net_linkaddr_eth_broadcast_address(void);
 
 /**
  * @brief Compare two link layer addresses.
@@ -117,6 +112,10 @@ static inline bool net_linkaddr_cmp(struct net_linkaddr *lladdr1,
 		return false;
 	}
 
+	if (lladdr1->type != lladdr2->type) {
+		return false;
+	}
+
 	return !memcmp(lladdr1->addr, lladdr2->addr, lladdr1->len);
 }
 
@@ -129,10 +128,11 @@ static inline bool net_linkaddr_cmp(struct net_linkaddr *lladdr1,
  * @param new_len Length of the link address array.
  * This value should always be <= NET_LINK_ADDR_MAX_LENGTH.
  */
-static inline int net_linkaddr_set(struct net_linkaddr_storage *lladdr_store,
-				   uint8_t *new_addr, uint8_t new_len)
+static inline int net_linkaddr_set(struct net_linkaddr *lladdr,
+				   const uint8_t *new_addr, uint8_t new_len,
+				   enum net_link_type new_type)
 {
-	if (!lladdr_store || !new_addr) {
+	if (!lladdr || !new_addr) {
 		return -EINVAL;
 	}
 
@@ -140,10 +140,16 @@ static inline int net_linkaddr_set(struct net_linkaddr_storage *lladdr_store,
 		return -EMSGSIZE;
 	}
 
-	lladdr_store->len = new_len;
-	memcpy(lladdr_store->addr, new_addr, new_len);
+	lladdr->type = new_type;
+	lladdr->len = new_len;
+	memcpy(lladdr->addr, new_addr, new_len);
 
 	return 0;
+}
+
+static inline int net_linkaddr_eth_set(struct net_linkaddr *linkaddr, const uint8_t *addr)
+{
+	return net_linkaddr_set(linkaddr, addr, 6, NET_LINK_ETHERNET);
 }
 
 /**

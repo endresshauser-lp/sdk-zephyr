@@ -300,7 +300,7 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 				      uint8_t prefix_len,
 				      struct in6_addr *nexthop)
 {
-	struct net_linkaddr_storage *nexthop_lladdr;
+	struct net_linkaddr *nexthop_lladdr;
 	struct net_nbr *nbr, *nbr_nexthop, *tmp;
 	struct net_route_nexthop *nexthop_route;
 	struct net_route_entry *route;
@@ -363,7 +363,7 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 
 		if (CONFIG_NET_ROUTE_LOG_LEVEL >= LOG_LEVEL_DBG) {
 			struct in6_addr *tmp;
-			struct net_linkaddr_storage *llstorage;
+			struct net_linkaddr *llstorage;
 
 			tmp = net_route_get_nexthop(route);
 			nbr = net_ipv6_nbr_lookup(iface, tmp);
@@ -823,7 +823,7 @@ bool net_route_get_info(struct net_if *iface,
 
 int net_route_packet(struct net_pkt *pkt, struct in6_addr *nexthop)
 {
-	struct net_linkaddr_storage *lladdr;
+	struct net_linkaddr *lladdr;
 	struct net_nbr *nbr;
 
 	nbr = net_ipv6_nbr_lookup(NULL, nexthop);
@@ -877,13 +877,9 @@ int net_route_packet(struct net_pkt *pkt, struct in6_addr *nexthop)
 	/* Set the destination and source ll address in the packet.
 	 * We set the destination address to be the nexthop recipient.
 	 */
-	net_pkt_lladdr_src(pkt)->addr = net_pkt_lladdr_if(pkt)->addr;
-	net_pkt_lladdr_src(pkt)->type = net_pkt_lladdr_if(pkt)->type;
-	net_pkt_lladdr_src(pkt)->len = net_pkt_lladdr_if(pkt)->len;
+	net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_pkt_lladdr_if(pkt));
 
-	net_pkt_lladdr_dst(pkt)->addr = lladdr->addr;
-	net_pkt_lladdr_dst(pkt)->type = lladdr->type;
-	net_pkt_lladdr_dst(pkt)->len = lladdr->len;
+	net_linkaddr_copy(net_pkt_lladdr_dst(pkt), lladdr);
 
 	net_pkt_set_iface(pkt, nbr->iface);
 
@@ -901,9 +897,7 @@ int net_route_packet_if(struct net_pkt *pkt, struct net_if *iface)
 
 	net_pkt_set_forwarding(pkt, true);
 
-	net_pkt_lladdr_src(pkt)->addr = net_pkt_lladdr_if(pkt)->addr;
-	net_pkt_lladdr_src(pkt)->type = net_pkt_lladdr_if(pkt)->type;
-	net_pkt_lladdr_src(pkt)->len = net_pkt_lladdr_if(pkt)->len;
+	net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_pkt_lladdr_if(pkt));
 
 	return net_send_data(pkt);
 }
