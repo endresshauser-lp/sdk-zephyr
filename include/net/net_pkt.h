@@ -952,16 +952,16 @@ static inline struct net_linkaddr *net_pkt_lladdr_dst(struct net_pkt *pkt)
 
 static inline void net_pkt_lladdr_swap(struct net_pkt *pkt)
 {
-	uint8_t *addr = net_pkt_lladdr_src(pkt)->addr;
+	struct net_linkaddr tmp;
 
-	net_pkt_lladdr_src(pkt)->addr = net_pkt_lladdr_dst(pkt)->addr;
-	net_pkt_lladdr_dst(pkt)->addr = addr;
+	net_linkaddr_copy(&tmp, net_pkt_lladdr_src(pkt));
+	net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_pkt_lladdr_dst(pkt));
+	net_linkaddr_copy(net_pkt_lladdr_dst(pkt), &tmp);
 }
 
 static inline void net_pkt_lladdr_clear(struct net_pkt *pkt)
 {
-	net_pkt_lladdr_src(pkt)->addr = NULL;
-	net_pkt_lladdr_src(pkt)->len = 0U;
+	memset(net_pkt_lladdr_src(pkt), 0, sizeof(struct net_linkaddr));
 }
 
 #if defined(CONFIG_IEEE802154) || defined(CONFIG_IEEE802154_RAW_MODE)

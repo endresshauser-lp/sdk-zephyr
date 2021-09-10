@@ -123,10 +123,7 @@ int net_nbr_link(struct net_nbr *nbr, struct net_if *iface,
 	net_neighbor_lladdr[avail].ref++;
 	nbr->idx = avail;
 
-	net_linkaddr_set(&net_neighbor_lladdr[avail].lladdr, lladdr->addr,
-			 lladdr->len);
-	net_neighbor_lladdr[avail].lladdr.len = lladdr->len;
-	net_neighbor_lladdr[avail].lladdr.type = lladdr->type;
+	net_linkaddr_copy(&net_neighbor_lladdr[avail].lladdr, lladdr);
 
 	nbr->iface = iface;
 
@@ -177,7 +174,7 @@ struct net_nbr *net_nbr_lookup(struct net_nbr_table *table,
 	return NULL;
 }
 
-struct net_linkaddr_storage *net_nbr_get_lladdr(uint8_t idx)
+struct net_linkaddr *net_nbr_get_lladdr(uint8_t idx)
 {
 	NET_ASSERT(idx < CONFIG_NET_IPV6_MAX_NEIGHBORS,
 		   "idx %d >= max %d", idx,

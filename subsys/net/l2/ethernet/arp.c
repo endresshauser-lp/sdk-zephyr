@@ -276,19 +276,16 @@ static inline struct net_pkt *arp_prepare(struct net_if *iface,
 
 		net_ipaddr_copy(&entry->ip, next_addr);
 
-		net_pkt_lladdr_src(pkt)->addr =
-			(uint8_t *)net_if_get_link_addr(entry->iface)->addr;
+		net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_if_get_link_addr(entry->iface));
 
 		arp_entry_register_pending(entry);
 	} else {
-		net_pkt_lladdr_src(pkt)->addr =
-			(uint8_t *)net_if_get_link_addr(iface)->addr;
+		net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_if_get_link_addr(iface));
 	}
 
 	net_pkt_lladdr_src(pkt)->len = sizeof(struct net_eth_addr);
 
-	net_pkt_lladdr_dst(pkt)->addr = (uint8_t *)net_eth_broadcast_addr();
-	net_pkt_lladdr_dst(pkt)->len = sizeof(struct net_eth_addr);
+	net_linkaddr_copy(net_pkt_lladdr_dst(pkt), net_linkaddr_eth_broadcast_address());
 
 	hdr->hwtype = htons(NET_ARP_HTYPE_ETH);
 	hdr->protocol = htons(NET_ETH_PTYPE_IP);
@@ -385,12 +382,9 @@ struct net_pkt *net_arp_prepare(struct net_pkt *pkt,
 		return req;
 	}
 
-	net_pkt_lladdr_src(pkt)->addr =
-		(uint8_t *)net_if_get_link_addr(entry->iface)->addr;
-	net_pkt_lladdr_src(pkt)->len = sizeof(struct net_eth_addr);
+	net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_if_get_link_addr(entry->iface));
 
-	net_pkt_lladdr_dst(pkt)->addr = (uint8_t *)&entry->eth;
-	net_pkt_lladdr_dst(pkt)->len = sizeof(struct net_eth_addr);
+	net_linkaddr_eth_set(net_pkt_lladdr_dst(pkt), entry->eth.addr);
 
 	NET_DBG("ARP using ll %s for IP %s",
 		log_strdup(net_sprint_ll_addr(net_pkt_lladdr_dst(pkt)->addr,
@@ -470,9 +464,8 @@ static void arp_update(struct net_if *iface,
 	}
 
 	/* Set the dst in the pending packet */
-	net_pkt_lladdr_dst(entry->pending)->len = sizeof(struct net_eth_addr);
-	net_pkt_lladdr_dst(entry->pending)->addr =
-		(uint8_t *) &NET_ETH_HDR(entry->pending)->dst.addr;
+	net_linkaddr_eth_set(net_pkt_lladdr_dst(entry->pending),
+		NET_ETH_HDR(entry->pending)->dst.addr);
 
 	NET_DBG("dst %s pending %p frag %p",
 		log_strdup(net_sprint_ipv4_addr(&entry->ip)),
@@ -524,11 +517,9 @@ static inline struct net_pkt *arp_prepare_reply(struct net_if *iface,
 	net_ipaddr_copy(&hdr->dst_ipaddr, &query->src_ipaddr);
 	net_ipaddr_copy(&hdr->src_ipaddr, &query->dst_ipaddr);
 
-	net_pkt_lladdr_src(pkt)->addr = net_if_get_link_addr(iface)->addr;
-	net_pkt_lladdr_src(pkt)->len = sizeof(struct net_eth_addr);
+	net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_if_get_link_addr(iface));
 
-	net_pkt_lladdr_dst(pkt)->addr = (uint8_t *)&hdr->dst_hwaddr.addr;
-	net_pkt_lladdr_dst(pkt)->len = sizeof(struct net_eth_addr);
+	net_linkaddr_eth_set(net_pkt_lladdr_dst(pkt), hdr->dst_hwaddr.addr);
 
 	return pkt;
 }

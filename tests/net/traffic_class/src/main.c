@@ -341,7 +341,7 @@ static void priority_setup(void)
 #if defined(CONFIG_NET_IPV6_NBR_CACHE)
 static bool add_neighbor(struct net_if *iface, struct in6_addr *addr)
 {
-	struct net_linkaddr_storage llstorage;
+	struct net_linkaddr llstorage;
 	struct net_linkaddr lladdr;
 	struct net_nbr *nbr;
 

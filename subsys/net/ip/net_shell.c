@@ -721,7 +721,7 @@ static void route_cb(struct net_route_entry *entry, void *user_data)
 	count = 0;
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&entry->nexthop, nexthop_route, node) {
-		struct net_linkaddr_storage *lladdr;
+		struct net_linkaddr *lladdr;
 
 		if (!nexthop_route->nbr) {
 			continue;

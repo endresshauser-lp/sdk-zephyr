@@ -230,14 +230,10 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 
 	/* Set the pointers to ll src and dst addresses */
 	lladdr = net_pkt_lladdr_src(pkt);
-	lladdr->addr = hdr->src.addr;
-	lladdr->len = sizeof(struct net_eth_addr);
-	lladdr->type = NET_LINK_ETHERNET;
+	net_linkaddr_eth_set(lladdr, hdr->src.addr);
 
 	lladdr = net_pkt_lladdr_dst(pkt);
-	lladdr->addr = hdr->dst.addr;
-	lladdr->len = sizeof(struct net_eth_addr);
-	lladdr->type = NET_LINK_ETHERNET;
+	net_linkaddr_eth_set(lladdr, hdr->dst.addr);
 
 	if (net_eth_is_vlan_enabled(ctx, iface)) {
 		if (type == NET_ETH_PTYPE_VLAN ||
@@ -617,12 +613,8 @@ static int ethernet_send(struct net_if *iface, struct net_pkt *pkt)
 			dst_addr = (struct sockaddr_ll *)&context->remote;
 			src_addr = (struct sockaddr_ll_ptr *)&context->local;
 
-			net_pkt_lladdr_dst(pkt)->addr = dst_addr->sll_addr;
-			net_pkt_lladdr_dst(pkt)->len =
-						sizeof(struct net_eth_addr);
-			net_pkt_lladdr_src(pkt)->addr = src_addr->sll_addr;
-			net_pkt_lladdr_src(pkt)->len =
-						sizeof(struct net_eth_addr);
+			net_linkaddr_eth_set(net_pkt_lladdr_dst(pkt), dst_addr->sll_addr);
+			net_linkaddr_eth_set(net_pkt_lladdr_src(pkt), src_addr->sll_addr);
 			ptype = dst_addr->sll_protocol;
 		} else {
 			goto send;
@@ -646,8 +638,7 @@ static int ethernet_send(struct net_if *iface, struct net_pkt *pkt)
 	 * it might detect this should be multicast and act accordingly.
 	 */
 	if (!net_pkt_lladdr_dst(pkt)->addr) {
-		net_pkt_lladdr_dst(pkt)->addr = (uint8_t *)broadcast_eth_addr.addr;
-		net_pkt_lladdr_dst(pkt)->len = sizeof(struct net_eth_addr);
+		net_linkaddr_eth_set(net_pkt_lladdr_dst(pkt), broadcast_eth_addr.addr);
 	}
 
 	if (IS_ENABLED(CONFIG_NET_VLAN) &&

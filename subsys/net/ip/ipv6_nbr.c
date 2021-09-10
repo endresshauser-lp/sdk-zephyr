@@ -439,7 +439,7 @@ static struct net_nbr *nbr_new(struct net_if *iface,
 }
 
 static void dbg_update_neighbor_lladdr(const struct net_linkaddr *new_lladdr,
-				       const struct net_linkaddr_storage *old_lladdr,
+				       const struct net_linkaddr *old_lladdr,
 				       const struct in6_addr *addr)
 {
 	char out[sizeof("xx:xx:xx:xx:xx:xx:xx:xx")];
@@ -455,7 +455,7 @@ static void dbg_update_neighbor_lladdr(const struct net_linkaddr *new_lladdr,
 }
 
 static void dbg_update_neighbor_lladdr_raw(uint8_t *new_lladdr,
-				       struct net_linkaddr_storage *old_lladdr,
+				       struct net_linkaddr *old_lladdr,
 				       struct in6_addr *addr)
 {
 	struct net_linkaddr lladdr = {
@@ -603,15 +603,14 @@ struct net_nbr *net_ipv6_nbr_add(struct net_if *iface,
 	if (net_nbr_link(nbr, iface, lladdr) == -EALREADY &&
 	    net_ipv6_nbr_data(nbr)->state != NET_IPV6_NBR_STATE_STATIC) {
 		/* Update the lladdr if the node was already known */
-		struct net_linkaddr_storage *cached_lladdr;
+		struct net_linkaddr *cached_lladdr;
 
 		cached_lladdr = net_nbr_get_lladdr(nbr->idx);
 
 		if (memcmp(cached_lladdr->addr, lladdr->addr, lladdr->len)) {
 			dbg_update_neighbor_lladdr(lladdr, cached_lladdr, addr);
 
-			net_linkaddr_set(cached_lladdr, lladdr->addr,
-					 lladdr->len);
+			net_linkaddr_copy(cached_lladdr, lladdr);
 
 			ipv6_nbr_set_state(nbr, NET_IPV6_NBR_STATE_STALE);
 		} else if (net_ipv6_nbr_data(nbr)->state ==
@@ -908,7 +907,7 @@ try_send:
 		"-");
 
 	if (nbr && nbr->idx != NET_NBR_LLADDR_UNKNOWN) {
-		struct net_linkaddr_storage *lladdr;
+		struct net_linkaddr *lladdr;
 
 		lladdr = net_nbr_get_lladdr(nbr->idx);
 
@@ -1022,7 +1021,7 @@ static inline bool set_llao(struct net_pkt *pkt,
 
 static bool read_llao(struct net_pkt *pkt,
 		      uint8_t len,
-		      struct net_linkaddr_storage *llstorage)
+		      struct net_linkaddr *llstorage)
 {
 	uint8_t padding;
 
@@ -1158,7 +1157,7 @@ static enum net_verdict handle_ns_input(struct net_pkt *pkt,
 	const struct in6_addr *na_src;
 	const struct in6_addr *na_dst;
 	struct in6_addr *tgt;
-	struct net_linkaddr_storage src_lladdr_s;
+	struct net_linkaddr src_lladdr_s;
 	struct net_linkaddr src_lladdr;
 
 	src_lladdr.len = 0;
@@ -1538,9 +1537,9 @@ static inline bool handle_na_neighbor(struct net_pkt *pkt,
 				      struct net_icmpv6_na_hdr *na_hdr,
 				      uint16_t tllao_offset)
 {
-	struct net_linkaddr_storage lladdr = { 0 };
+	struct net_linkaddr lladdr = { 0 };
 	bool lladdr_changed = false;
-	struct net_linkaddr_storage *cached_lladdr;
+	struct net_linkaddr *cached_lladdr;
 	struct net_pkt *pending;
 	struct net_nbr *nbr;
 
@@ -1614,8 +1613,7 @@ static inline bool handle_na_neighbor(struct net_pkt *pkt,
 						       cached_lladdr,
 						       &na_hdr->tgt);
 
-			net_linkaddr_set(cached_lladdr, lladdr.addr,
-					 cached_lladdr->len);
+			net_linkaddr_copy(cached_lladdr, lladdr);
 		}
 
 		if (na_hdr->flags & NET_ICMPV6_NA_FLAG_SOLICITED) {
@@ -1658,8 +1656,7 @@ static inline bool handle_na_neighbor(struct net_pkt *pkt,
 			dbg_update_neighbor_lladdr_raw(
 				lladdr.addr, cached_lladdr, &na_hdr->tgt);
 
-			net_linkaddr_set(cached_lladdr, lladdr.addr,
-					 cached_lladdr->len);
+			net_linkaddr_copy(cached_lladdr, lladdr);
 		}
 
 		if (na_hdr->flags & NET_ICMPV6_NA_FLAG_SOLICITED) {
@@ -2036,7 +2033,7 @@ int net_ipv6_start_rs(struct net_if *iface)
 static inline struct net_nbr *handle_ra_neighbor(struct net_pkt *pkt, uint8_t len)
 {
 	struct net_linkaddr lladdr;
-	struct net_linkaddr_storage llstorage;
+	struct net_linkaddr llstorage;
 
 	if (!read_llao(pkt, len, &llstorage)) {
 		return NULL;

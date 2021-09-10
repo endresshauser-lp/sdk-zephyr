@@ -72,7 +72,7 @@ static void test_neighbor(void)
 
 	struct net_nbr *nbr;
 	struct net_linkaddr lladdr;
-	struct net_linkaddr_storage *lladdr_ptr;
+	struct net_linkaddr *lladdr_ptr;
 	struct net_if *iface1 = INT_TO_POINTER(1);
 	struct net_if *iface2 = INT_TO_POINTER(2);
 	int ret, i;

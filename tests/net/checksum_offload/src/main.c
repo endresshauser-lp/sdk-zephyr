@@ -435,20 +435,13 @@ static void test_address_setup(void)
 
 static bool add_neighbor(struct net_if *iface, struct in6_addr *addr)
 {
-	struct net_linkaddr_storage llstorage;
-	struct net_linkaddr lladdr;
+	static const struct net_linkaddr lladdr = {
+		.type = NET_LINK_ETHERNET,
+		.len = 6,
+		.addr = {0x01, 0x02, 0x33, 0x44, 0x05, 0x06}
+	};
 	struct net_nbr *nbr;
 
-	llstorage.addr[0] = 0x01;
-	llstorage.addr[1] = 0x02;
-	llstorage.addr[2] = 0x33;
-	llstorage.addr[3] = 0x44;
-	llstorage.addr[4] = 0x05;
-	llstorage.addr[5] = 0x06;
-
-	lladdr.len = 6U;
-	lladdr.addr = llstorage.addr;
-	lladdr.type = NET_LINK_ETHERNET;
 
 	nbr = net_ipv6_nbr_add(iface, addr, &lladdr, false,
 			       NET_IPV6_NBR_STATE_REACHABLE);
