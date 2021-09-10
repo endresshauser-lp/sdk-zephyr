@@ -205,10 +205,7 @@ static void update_txtime_stats_detail(struct net_pkt *pkt,
 
 static bool net_if_tx(struct net_if *iface, struct net_pkt *pkt)
 {
-	struct net_linkaddr ll_dst = {
-		.addr = NULL
-	};
-	struct net_linkaddr_storage ll_dst_storage;
+	struct net_linkaddr ll_dst;
 	struct net_context *context;
 	uint32_t create_time;
 	int status;
@@ -229,13 +226,7 @@ static bool net_if_tx(struct net_if *iface, struct net_pkt *pkt)
 	 * case packet is freed before callback is called.
 	 */
 	if (!sys_slist_is_empty(&link_callbacks)) {
-		if (net_linkaddr_set(&ll_dst_storage,
-				     net_pkt_lladdr_dst(pkt)->addr,
-				     net_pkt_lladdr_dst(pkt)->len) == 0) {
-			ll_dst.addr = ll_dst_storage.addr;
-			ll_dst.len = ll_dst_storage.len;
-			ll_dst.type = net_pkt_lladdr_dst(pkt)->type;
-		}
+		net_linkaddr_copy(&ll_dst, net_pkt_lladdr_dst(pkt));
 	}
 
 	context = net_pkt_context(pkt);
@@ -454,9 +445,8 @@ enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
 	 * https://github.com/zephyrproject-rtos/zephyr/issues/3111
 	 */
 	if (!net_if_flag_is_set(iface, NET_IF_POINTOPOINT) &&
-	    !net_pkt_lladdr_src(pkt)->addr) {
-		net_pkt_lladdr_src(pkt)->addr = net_pkt_lladdr_if(pkt)->addr;
-		net_pkt_lladdr_src(pkt)->len = net_pkt_lladdr_if(pkt)->len;
+	    !net_pkt_lladdr_src(pkt)->len) {
+		net_linkaddr_copy(net_pkt_lladdr_src(pkt), net_pkt_lladdr_if(pkt));
 	}
 
 #if defined(CONFIG_NET_LOOPBACK)

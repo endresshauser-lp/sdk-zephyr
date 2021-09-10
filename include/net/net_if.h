@@ -740,9 +740,7 @@ static inline int net_if_set_link_addr_unlocked(struct net_if *iface,
 		return -EPERM;
 	}
 
-	net_if_get_link_addr(iface)->addr = addr;
-	net_if_get_link_addr(iface)->len = len;
-	net_if_get_link_addr(iface)->type = type;
+	net_linkaddr_set(net_if_get_link_addr(iface), addr, len, type);
 
 	net_hostname_set_postfix(addr, len);
 
