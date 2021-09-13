@@ -67,6 +67,8 @@ manifest:
       path: modules/hal/microchip
     - name: hal_silabs
       revision: be39d4eebeddac6e18e9c0c3ba1b31ad1e82eaed
+      url: https://github.com/rvoell-gcx/hal_silabs
+      revision: add_wfx_fullmac_driver
       path: modules/hal/silabs
     - name: hal_st
       revision: b52fdbf4b62439be9fab9bb4bae9690a42d2fb14
