@@ -56,6 +56,7 @@ struct wfx200_dev {
 	struct spi_cs_control cs_ctrl;
 
 	size_t firmware_pos;
+	uint32_t firmware_size;
 
 	struct wfx200_gpio interrupt;
 	struct wfx200_gpio reset;
