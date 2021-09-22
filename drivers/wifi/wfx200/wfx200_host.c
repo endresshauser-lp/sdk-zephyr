@@ -24,7 +24,9 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include "wfx200_internal.h"
 
-//#include <sl_wfx_wf200_C0.h>
+#ifdef CONFIG_WIFI_WFX200_FIRMWARE_SOURCE_USE_FLASH
+#include <sl_wfx_wf200_C0.h>
+#endif
 
 #define WFX200_HOST_NOT_IMPLEMENTED() do {		      \
 		LOG_ERR("%s: not implemented yet", __func__); \
@@ -72,27 +74,34 @@ sl_status_t sl_wfx_host_get_firmware_data(const uint8_t **data, uint32_t data_si
 {
 	if (data == NULL || wfx200_0.firmware_pos >= wfx200_0.firmware_size) {
 		return SL_STATUS_FAIL;
-	}
+    }
 
+#ifdef CONFIG_WIFI_WFX200_FIRMWARE_SOURCE_USE_EXTERNAL_MEMORY
 	if (!OnFirmwareChunkRequested(data, data_size)) {
 		return SL_STATUS_FAIL;
 	}
+#elif CONFIG_WIFI_WFX200_FIRMWARE_SOURCE_USE_FLASH
+	*data = sl_wfx_firmware + wfx200_0.firmware_pos;
+#endif
 
 	wfx200_0.firmware_pos += data_size;
-
+	
 	return SL_STATUS_OK;
 }
 
 sl_status_t sl_wfx_host_get_firmware_size(uint32_t *firmware_size)
 {
 	if (firmware_size == NULL) {
-		return SL_STATUS_FAIL;
-	}
-
+        return SL_STATUS_FAIL;
+    }
+#ifdef CONFIG_WIFI_WFX200_FIRMWARE_SOURCE_USE_EXTERNAL_MEMORY
 	if (!OnFirmwareSizeRequested(firmware_size)) {
-		return SL_STATUS_FAIL;
+        return SL_STATUS_FAIL;
 	}
-
+#elif CONFIG_WIFI_WFX200_FIRMWARE_SOURCE_USE_FLASH
+    *firmware_size = sizeof(sl_wfx_firmware);
+#endif
+    
 	wfx200_0.firmware_size = *firmware_size;
 
 	return SL_STATUS_OK;
@@ -274,6 +283,7 @@ sl_status_t sl_wfx_host_post_event(sl_wfx_generic_message_t *event_payload)
 		sl_wfx_exception_ind_t *firmware_exception;
 		sl_wfx_error_ind_t *firmware_error;
 	} u;
+
 
 	switch (event_payload->header.id) {
 	/******** INDICATION ********/
