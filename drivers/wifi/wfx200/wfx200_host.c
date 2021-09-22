@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include "wfx200_internal.h"
 
-#include <sl_wfx_wf200_C0.h>
+//#include <sl_wfx_wf200_C0.h>
 
 #define WFX200_HOST_NOT_IMPLEMENTED() do {		      \
 		LOG_ERR("%s: not implemented yet", __func__); \
@@ -56,22 +56,30 @@ void sl_wfx_ap_client_rejected_callback(sl_wfx_ap_client_rejected_ind_t *ap_clie
 void sl_wfx_ap_client_disconnected_callback(sl_wfx_ap_client_disconnected_ind_t *ap_client_disconnected);
 void sl_wfx_ext_auth_callback(sl_wfx_ext_auth_ind_t *ext_auth_indication);
 
+
 /**
  * Functions for initializing the host, firmware uploading and pds
  */
 sl_status_t sl_wfx_host_init(void)
 {
+	OnFirmwareInit();
+
 	/* Initialization happens in wfx200_init, nothing to do here */
 	return SL_STATUS_OK;
 }
 
 sl_status_t sl_wfx_host_get_firmware_data(const uint8_t **data, uint32_t data_size)
 {
-	if (data == NULL || wfx200_0.firmware_pos >= sizeof(sl_wfx_firmware)) {
+	if (data == NULL || wfx200_0.firmware_pos >= wfx200_0.firmware_size) {
 		return SL_STATUS_FAIL;
 	}
-	*data = sl_wfx_firmware + wfx200_0.firmware_pos;
+
+	if (!OnFirmwareChunkRequested(data, data_size)) {
+		return SL_STATUS_FAIL;
+	}
+
 	wfx200_0.firmware_pos += data_size;
+
 	return SL_STATUS_OK;
 }
 
@@ -80,7 +88,13 @@ sl_status_t sl_wfx_host_get_firmware_size(uint32_t *firmware_size)
 	if (firmware_size == NULL) {
 		return SL_STATUS_FAIL;
 	}
-	*firmware_size = sizeof(sl_wfx_firmware);
+
+	if (!OnFirmwareSizeRequested(firmware_size)) {
+		return SL_STATUS_FAIL;
+	}
+
+	wfx200_0.firmware_size = *firmware_size;
+
 	return SL_STATUS_OK;
 }
 
