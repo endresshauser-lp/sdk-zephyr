@@ -14,6 +14,22 @@ menuconfig WIFI_WFX200
 
 if WIFI_WFX200
 
+config WIFI_WFX200_EVENT_THREAD_PRIORITY
+    int "Driver task priority"
+    default 2
+
+config WIFI_WFX200_EVENT_THREAD_STACK_SIZE
+    int "Driver task stack size"
+    default 2048
+
+config WIFI_WFX200_RX_THREAD_PRIORITY
+    int "Driver task priority"
+    default 2
+
+config WIFI_WFX200_RX_THREAD_STACK_SIZE
+    int "Driver task stack size"
+    default 2048
+
 choice WIFI_WFX200_BUS
     bool "Select BUS interface"
     default WIFI_WFX200_BUS_SPI
@@ -33,17 +49,9 @@ config WIFI_WFX200_VERBOSE_DEBUG
     bool "Enable verbose debugging"
     depends on LOG_PRINTK
 
-config WIFI_WFX200_STACK_SIZE
-    int "Driver task stack size"
-    default 2048
-
 config WIFI_WFX200_HEAP_SIZE
     int "Driver heap size"
     default 4096
-
-config WIFI_WFX200_PRIORITY
-    int "Driver task priority"
-    default 2
 
 config WIFI_WFX200_SLEEP
     bool "Enable sleep mode"

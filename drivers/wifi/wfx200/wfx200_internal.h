@@ -29,9 +29,6 @@ enum wfx200_event {
 
 struct wfx200_queue_event {
 	enum wfx200_event ev;
-	union {
-
-	};
 };
 
 struct wfx200_gpio {
@@ -85,8 +82,8 @@ struct wfx200_dev {
 	struct k_queue event_queue;
 	struct k_thread event_thread;
 
-	K_KERNEL_STACK_MEMBER(wfx200_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
-	K_KERNEL_STACK_MEMBER(wfx200_event_stack_area, CONFIG_WIFI_WFX200_STACK_SIZE);
+	K_KERNEL_STACK_MEMBER(wfx200_rx_stack_area, CONFIG_WIFI_WFX200_RX_THREAD_STACK_SIZE);
+	K_KERNEL_STACK_MEMBER(wfx200_event_stack_area, CONFIG_WIFI_WFX200_EVENT_THREAD_STACK_SIZE);
 
 	struct k_heap heap;
 	char heap_buffer[CONFIG_WIFI_WFX200_HEAP_SIZE];

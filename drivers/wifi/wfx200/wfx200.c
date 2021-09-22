@@ -461,16 +461,16 @@ static int wfx200_init(const struct device *dev)
 		}
 	}
 
-	k_work_queue_start(&context->incoming_work_q, context->wfx200_stack_area,
-			   K_THREAD_STACK_SIZEOF(context->wfx200_stack_area),
-			   CONFIG_WIFI_WFX200_PRIORITY,
+	k_work_queue_start(&context->incoming_work_q, context->wfx200_rx_stack_area,
+			   K_THREAD_STACK_SIZEOF(context->wfx200_rx_stack_area),
+			   CONFIG_WIFI_WFX200_RX_THREAD_PRIORITY,
 			   &(const struct k_work_queue_config){ .name = "wfx200_rx", });
 	k_work_init(&context->incoming_work, wfx200_incoming_work);
 	k_queue_init(&context->event_queue);
 	k_thread_create(&context->event_thread, context->wfx200_event_stack_area,
 			K_THREAD_STACK_SIZEOF(context->wfx200_event_stack_area),
 			wfx200_event_thread, context, NULL, NULL,
-			CONFIG_WIFI_WFX200_PRIORITY, 0, K_NO_WAIT);
+			CONFIG_WIFI_WFX200_EVENT_THREAD_PRIORITY, 0, K_NO_WAIT);
 
 	res = sl_wfx_init(&context->sl_context);
 	if (res != SL_STATUS_OK) {
