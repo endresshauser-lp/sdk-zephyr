@@ -502,4 +502,25 @@
 #include "mbedtls/check_config.h"
 #endif
 
+// Custom modifications
+// for printing mbedTLS keys and certificates
+#define MBEDTLS_PEM_WRITE_C
+#define MBEDTLS_PK_WRITE_C
+#define MBEDTLS_BASE64_C
+// for key generation
+#define MBEDTLS_PK_C
+#define MBEDTLS_ECP_C
+#define MBEDTLS_ECP_DP_SECP256R1_ENABLED
+#define MBEDTLS_OID_C
+#define MBEDTLS_ASN1_WRITE_C
+
+#define MBEDTLS_ENTROPY_C
+
+// For CSR
+#define MBEDTLS_X509_CSR_WRITE_C
+#define MBEDTLS_ECDSA_C
+#define MBEDTLS_ECDH_C
+#define MBEDTLS_X509_CREATE_C
+#include "mbedtls/check_config.h"
+
 #endif /* MBEDTLS_CONFIG_H */
