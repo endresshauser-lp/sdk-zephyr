@@ -23,9 +23,10 @@
 #define MBEDTLS_HAVE_ASM
 #endif
 
-#if defined(CONFIG_MBEDTLS_HAVE_TIME_DATE)
-#define MBEDTLS_HAVE_TIME
-#define MBEDTLS_HAVE_TIME_DATE
+/* If we build with POSIX API, automatically use time(), etc. */
+#if defined(CONFIG_POSIX_API)
+//#define MBEDTLS_HAVE_TIME
+//#define MBEDTLS_HAVE_TIME_DATE
 #endif
 
 #if defined(CONFIG_MBEDTLS_TEST)
@@ -428,6 +429,26 @@
 #if defined(CONFIG_MBEDTLS_USER_CONFIG_FILE)
 #include CONFIG_MBEDTLS_USER_CONFIG_FILE
 #endif
+
+// Custom modifications
+// for printing mbedTLS keys and certificates
+#define MBEDTLS_PEM_WRITE_C
+#define MBEDTLS_PK_WRITE_C
+#define MBEDTLS_BASE64_C
+// for key generation
+#define MBEDTLS_PK_C
+#define MBEDTLS_ECP_C
+#define MBEDTLS_ECP_DP_SECP256R1_ENABLED
+#define MBEDTLS_OID_C
+#define MBEDTLS_ASN1_WRITE_C
+
+#define MBEDTLS_ENTROPY_C
+
+// For CSR
+#define MBEDTLS_X509_CSR_WRITE_C
+#define MBEDTLS_ECDSA_C
+#define MBEDTLS_ECDH_C
+#define MBEDTLS_X509_CREATE_C
 
 #include "mbedtls/check_config.h"
 
