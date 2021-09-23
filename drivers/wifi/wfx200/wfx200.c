@@ -81,17 +81,11 @@ int wfx200_send(const struct device *dev, struct net_pkt *pkt)
 		status = -EIO;
 		goto error;
 	}
-	if (context->state == WFX200_STATE_AP_MODE) {
-		result = sl_wfx_send_ethernet_frame(tx_buffer,
-						    frame_len,
-						    SL_WFX_SOFTAP_INTERFACE,
-						    WFM_PRIORITY_BE0);
-	} else {
-		result = sl_wfx_send_ethernet_frame(tx_buffer,
-						    frame_len,
-						    SL_WFX_STA_INTERFACE,
-						    WFM_PRIORITY_BE0);
-	}
+
+	result = sl_wfx_send_ethernet_frame(tx_buffer,
+					    frame_len,
+					    (context->state == WFX200_STATE_AP_MODE) ? SL_WFX_SOFTAP_INTERFACE : SL_WFX_STA_INTERFACE,
+					    WFM_PRIORITY_BE0);
 
 	if (result != SL_STATUS_OK) {
 		status = -EIO;
