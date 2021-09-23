@@ -539,4 +539,40 @@
 #include CONFIG_MBEDTLS_USER_CONFIG_FILE
 #endif
 
+#if !defined(CONFIG_MBEDTLS_PSA_CRYPTO_C)
+/* When PSA API is used the checking header is included over the chain:
+ * |-psa/crypto.h
+ * |-psa/crypto_platform.h
+ * |-mbedtls/build_info.h
+ * |-mbedtls/check_config.h
+ * If include this header here then PSA API will be in semiconfigured state
+ * without considering dependencies from mbedtls/config_psa.h.
+ * mbedtls/config_psa.h should be included right after config-tls-generic.h before checking.
+ * Formally, all settings are correct but mbedtls library cannot be built.
+ * The behavior was introduced after adding mbedTLS 3.4.0
+ */
+#include "mbedtls/check_config.h"
+#endif
+
+// Custom modifications
+// for printing mbedTLS keys and certificates
+#define MBEDTLS_PEM_WRITE_C
+#define MBEDTLS_PK_WRITE_C
+#define MBEDTLS_BASE64_C
+// for key generation
+#define MBEDTLS_PK_C
+#define MBEDTLS_ECP_C
+#define MBEDTLS_ECP_DP_SECP256R1_ENABLED
+#define MBEDTLS_OID_C
+#define MBEDTLS_ASN1_WRITE_C
+
+#define MBEDTLS_ENTROPY_C
+
+// For CSR
+#define MBEDTLS_X509_CSR_WRITE_C
+#define MBEDTLS_ECDSA_C
+#define MBEDTLS_ECDH_C
+#define MBEDTLS_X509_CREATE_C
+#include "mbedtls/check_config.h"
+
 #endif /* MBEDTLS_CONFIG_H */
