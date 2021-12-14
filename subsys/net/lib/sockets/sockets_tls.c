@@ -595,14 +595,19 @@ static int tls_tx(void *ctx, const unsigned char *buf, size_t len)
 {
 	struct tls_context *tls_ctx = ctx;
 	ssize_t sent;
+	size_t retrycount = 0;
 
-	sent = zsock_sendto(tls_ctx->sock, buf, len,
-			    tls_ctx->flags, NULL, 0);
+	do {
+		sent = zsock_sendto(tls_ctx->sock, buf, len,
+		                    tls_ctx->flags, NULL, 0);
+		retrycount++;
+	} while (sent < 0 && errno == EAGAIN);
+
+	if (retrycount > 1) {
+		LOG_INF("Retried %d times to send packet.", retrycount);
+	}
+
 	if (sent < 0) {
-		if (errno == EAGAIN) {
-			return MBEDTLS_ERR_SSL_WANT_WRITE;
-		}
-
 		return MBEDTLS_ERR_NET_SEND_FAILED;
 	}
 
