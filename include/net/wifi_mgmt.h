@@ -109,18 +109,22 @@ struct wifi_status {
 };
 
 #include <net/net_if.h>
+#include <net/ethernet.h>
 
 typedef void (*scan_result_cb_t)(struct net_if *iface, int status,
 				 struct wifi_scan_result *entry);
 
-struct net_wifi_mgmt_offload {
+struct net_wifi_mgmt {
 	/**
 	 * Mandatory to get in first position.
 	 * A network device should indeed provide a pointer on such
 	 * net_if_api structure. So we make current structure pointer
 	 * that can be casted to a net_if_api structure pointer.
 	 */
-	struct net_if_api iface_api;
+    union {
+        struct net_if_api iface_api;
+        struct ethernet_api eth_api;
+    };
 
 	/* cb parameter is the cb that should be called for each
 	 * result by the driver. The wifi mgmt part will take care of
@@ -135,10 +139,13 @@ struct net_wifi_mgmt_offload {
 	int (*ap_disable)(const struct device *dev);
 };
 
+#define net_wifi_mgmt_offload net_wifi_mgmt
+
 /* Make sure that the network interface API is properly setup inside
  * Wifi mgmt offload API struct (it is the first one).
  */
 BUILD_ASSERT(offsetof(struct net_wifi_mgmt_offload, iface_api) == 0);
+BUILD_ASSERT(offsetof(struct net_wifi_mgmt, eth_api) == 0);
 
 #ifdef CONFIG_WIFI_OFFLOAD
 
