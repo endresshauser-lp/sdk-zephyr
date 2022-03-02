@@ -4798,6 +4798,8 @@ static void tcp_recv_cb(struct net_context *context, struct net_pkt *pkt,
 	}
 
 	PR_SHELL(tcp_shell, "%zu bytes received\n", net_pkt_get_len(pkt));
+
+	net_pkt_unref(pkt);
 }
 #endif
 
