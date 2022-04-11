@@ -912,7 +912,7 @@ static void dhcpv4_handle_msg_ack(struct net_if *iface)
 	case NET_DHCPV4_BOUND:
 		break;
 	case NET_DHCPV4_REQUESTING:
-		NET_INFO("Received: %s",
+		printk("Received: %s",
 			 log_strdup(net_sprint_ipv4_addr(
 					 &iface->config.dhcpv4.requested_ip)));
 
@@ -920,7 +920,7 @@ static void dhcpv4_handle_msg_ack(struct net_if *iface)
 					  &iface->config.dhcpv4.requested_ip,
 					  NET_ADDR_DHCP,
 					  iface->config.dhcpv4.lease_time)) {
-			NET_DBG("Failed to add IPv4 addr to iface %p", iface);
+			printk("Failed to add IPv4 addr to iface %p", iface);
 			return;
 		}
 
