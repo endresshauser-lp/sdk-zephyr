@@ -1146,12 +1146,11 @@ void net_dhcpv4_start(struct net_if *iface)
 	uint32_t timeout;
 	uint32_t entropy;
 
-	net_mgmt_event_notify(NET_EVENT_IPV4_DHCP_START, iface);
-
 	k_mutex_lock(&lock, K_FOREVER);
 
 	switch (iface->config.dhcpv4.state) {
 	case NET_DHCPV4_DISABLED:
+		net_mgmt_event_notify(NET_EVENT_IPV4_DHCP_START, iface);
 		iface->config.dhcpv4.state = NET_DHCPV4_INIT;
 		NET_DBG("iface %p state=%s", iface,
 			net_dhcpv4_state_name(iface->config.dhcpv4.state));
@@ -1214,7 +1213,7 @@ void net_dhcpv4_stop(struct net_if *iface)
 	case NET_DHCPV4_BOUND:
 		if (!net_if_ipv4_addr_rm(iface,
 					 &iface->config.dhcpv4.requested_ip)) {
-			NET_DBG("Failed to remove addr from iface");
+			NET_ERR("Failed to remove addr from iface");
 		}
 
 		__fallthrough;
