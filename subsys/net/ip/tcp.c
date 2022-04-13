@@ -1759,18 +1759,8 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 			/* Adjust the window so that we do not run out of bufs
 			 * while waiting acks.
 			 */
-			// ToDo this is entirely unreliable and inflexible and will not work for most combinations of
-			// CONFIG_NET_BUF_RX_COUNT, CONFIG_NET_PKT_TX_COUNT, CONFIG_NET_BUF_DATA_SIZE
-			// and amounts of data sent via the socket
-			// E.g. with defaults as of Zephyr 2.6 (CONFIG_NET_BUF_RX_COUNT=36, CONFIG_NET_PKT_TX_COUNT=14, CONFIG_NET_BUF_DATA_SIZE=128)
-			// /3 doesn't provide correct window which leads to packet allocation issues.
-			// with /4, however, works stable with socket data up to (and including) 512 bytes
-			// This needs to be handled AT LEAST by checking in socket API if data can be sent properly.
-			// Proper fix, however, would be probably adjusting usage of tcp queues,
-			// s. tcp_send_queued_data, tsp_send_data and #define conn_send_data_dump(_conn),
-			// as well as this state machine.
 			max_win = (CONFIG_NET_BUF_TX_COUNT *
-				   CONFIG_NET_BUF_DATA_SIZE) / 4;
+				   CONFIG_NET_BUF_DATA_SIZE) / 3;
 		}
 
 		max_win = MAX(max_win, NET_IPV6_MTU);
