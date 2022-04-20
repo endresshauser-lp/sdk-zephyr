@@ -1702,7 +1702,7 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 			// s. tcp_send_queued_data, tsp_send_data and #define conn_send_data_dump(_conn),
 			// as well as this state machine.
 			max_win = (CONFIG_NET_BUF_TX_COUNT *
-				   CONFIG_NET_BUF_DATA_SIZE) / 4;
+				   CONFIG_NET_BUF_DATA_SIZE) / 3;
 		}
 
 		max_win = MAX(max_win, NET_IPV6_MTU);
