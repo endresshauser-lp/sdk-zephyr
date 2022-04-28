@@ -4114,6 +4114,7 @@ static int parse_arg(size_t *i, size_t argc, char *argv[])
 		str = argv[*i];
 	}
 
+	errno = 0;
 	res = strtol(str, &endptr, 10);
 
 	if (errno || (endptr == str)) {
@@ -4798,8 +4799,6 @@ static void tcp_recv_cb(struct net_context *context, struct net_pkt *pkt,
 	}
 
 	PR_SHELL(tcp_shell, "%zu bytes received\n", net_pkt_get_len(pkt));
-
-	net_pkt_unref(pkt);
 }
 #endif
 
