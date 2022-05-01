@@ -1232,6 +1232,7 @@ static struct net_pkt *pkt_alloc(struct k_mem_slab *slab, k_timeout_t timeout)
 
 	ret = k_mem_slab_alloc(slab, (void **)&pkt, timeout);
 	if (ret) {
+		printk("\nslaberr: %d\n", ret);
 		return NULL;
 	}
 

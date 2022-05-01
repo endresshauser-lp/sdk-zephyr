@@ -29,7 +29,8 @@ LOG_MODULE_REGISTER(net_tcp, CONFIG_NET_TCP_LOG_LEVEL);
 #define ACK_TIMEOUT_MS CONFIG_NET_TCP_ACK_TIMEOUT
 #define ACK_TIMEOUT K_MSEC(ACK_TIMEOUT_MS)
 /* Allow for (tcp_retries + 1) transmissions */
-#define FIN_TIMEOUT_MS (tcp_rto * (tcp_retries + 1))
+//ToDo: this should actually be two packet lifetimes.
+#define FIN_TIMEOUT_MS (2 * tcp_rto * tcp_retries)
 #define FIN_TIMEOUT K_MSEC(FIN_TIMEOUT_MS)
 
 static int tcp_rto = CONFIG_NET_TCP_INIT_RETRANSMISSION_TIMEOUT;
@@ -85,6 +86,7 @@ static int tcp_pkt_linearize(struct net_pkt *pkt, size_t pos, size_t len)
 		if (buf) {
 			net_buf_unref(buf);
 		}
+		printk("\nANUS_20\n");
 		ret = -ENOBUFS;
 		goto out;
 	}
@@ -160,7 +162,7 @@ static int tcp_endpoint_set(union tcp_endpoint *ep, struct net_pkt *pkt,
 
 			th = th_get(pkt);
 			if (!th) {
-				return -ENOBUFS;
+				printk("\nANUS_21\n");return -ENOBUFS;
 			}
 
 			memset(ep, 0, sizeof(*ep));
@@ -184,7 +186,7 @@ static int tcp_endpoint_set(union tcp_endpoint *ep, struct net_pkt *pkt,
 
 			th = th_get(pkt);
 			if (!th) {
-				return -ENOBUFS;
+				printk("\nANUS_22\n");return -ENOBUFS;
 			}
 
 			memset(ep, 0, sizeof(*ep));
@@ -722,6 +724,7 @@ static int tcp_data_get(struct tcp *conn, struct net_pkt *pkt, size_t *len)
 		struct net_pkt *up = tcp_pkt_clone(pkt);
 
 		if (!up) {
+			printk("\nANUS_23\n");
 			ret = -ENOBUFS;
 			goto out;
 		}
@@ -773,6 +776,7 @@ static int tcp_header_add(struct tcp *conn, struct net_pkt *pkt, uint8_t flags,
 
 	th = (struct tcphdr *)net_pkt_get_data(pkt, &tcp_access);
 	if (!th) {
+		printk("\nANUS_24\n");
 		return -ENOBUFS;
 	}
 
@@ -822,6 +826,7 @@ static int net_tcp_set_mss_opt(struct tcp *conn, struct net_pkt *pkt)
 
 	mss = net_pkt_get_data(pkt, &mss_opt_access);
 	if (!mss) {
+		printk("\nANUS_25\n");
 		return -ENOBUFS;
 	}
 
@@ -869,6 +874,7 @@ static int tcp_out_ext(struct tcp *conn, uint8_t flags, struct net_pkt *data,
 
 	pkt = tcp_pkt_alloc(conn, alloc_len);
 	if (!pkt) {
+		printk("\nANUS_26\n");
 		ret = -ENOBUFS;
 		goto out;
 	}
@@ -908,6 +914,7 @@ static int tcp_out_ext(struct tcp *conn, uint8_t flags, struct net_pkt *data,
 	NET_DBG("%s", log_strdup(tcp_th(pkt)));
 
 	if (tcp_send_cb) {
+		NET_INFO("Sending directly");
 		ret = tcp_send_cb(pkt);
 		goto out;
 	}
@@ -969,7 +976,9 @@ static bool tcp_window_full(struct tcp *conn)
 {
 	bool window_full = !(conn->unacked_len < conn->send_win);
 
-	NET_DBG("conn: %p window_full=%hu", conn, window_full);
+	// if (window_full) {
+	// 	NET_ERR("conn: %p window_full=%hu", conn, window_full);
+	// }
 
 	return window_full;
 }
@@ -1008,15 +1017,19 @@ static int tcp_send_data(struct tcp *conn)
 		goto out;
 	}
 
-	pkt = tcp_pkt_alloc(conn, len);
-	if (!pkt) {
-		NET_ERR("conn: %p packet allocation failed, len=%d", conn, len);
-		ret = -ENOBUFS;
-		goto out;
-	}
+	// if (conn->data_mode != TCP_DATA_MODE_RESEND) {
+		pkt = tcp_pkt_alloc(conn, len);
+		if (!pkt) {
+			NET_ERR("conn: %p packet allocation failed, len=%d", conn, len);
+			printk("\nANUS_27\n");
+			ret = -ENOBUFS;
+			goto out;
+		}
+	// }
 
 	ret = tcp_pkt_peek(pkt, conn->send_data, pos, len);
 	if (ret < 0) {
+		printk("\nANUS_28\n");
 		tcp_pkt_unref(pkt);
 		ret = -ENOBUFS;
 		goto out;
@@ -1055,6 +1068,7 @@ static int tcp_send_queued_data(struct tcp *conn)
 	bool subscribe = false;
 
 	if (conn->data_mode == TCP_DATA_MODE_RESEND) {
+		NET_ERR("We are in resend, so fuck");
 		goto out;
 	}
 
@@ -1082,7 +1096,7 @@ static int tcp_send_queued_data(struct tcp *conn)
 	 * yet. The socket layer will catch this and resend data if needed.
 	 */
 	if (ret == -ENOBUFS) {
-		NET_DBG("No bufs, cancelling retransmit timer");
+		NET_ERR("No bufs, cancelling retransmit timer");
 		k_work_cancel_delayable(&conn->send_data_timer);
 	}
 
@@ -1122,7 +1136,7 @@ static void tcp_resend_data(struct k_work *work)
 	NET_DBG("send_data_retries=%hu", conn->send_data_retries);
 
 	if (conn->send_data_retries >= tcp_retries) {
-		NET_DBG("conn: %p close, data retransmissions exceeded", conn);
+		NET_ERR("conn: %p close, data retransmissions exceeded", conn);
 		conn_unref = true;
 		goto out;
 	}
@@ -2214,9 +2228,13 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 		 * conn is embedded, and calling that function directly here
 		 * and in the work handler.
 		 */
-		(void)k_work_schedule_for_queue(&tcp_work_q,
+		// NET_ERR("Window full");
+		int rc = k_work_schedule_for_queue(&tcp_work_q,
 						&conn->send_data_timer,
 						K_NO_WAIT);
+		if (rc < 0) {
+			NET_ERR("Not scheduled: %d", rc);
+		}
 		ret = -EAGAIN;
 		goto out;
 	}
@@ -2243,6 +2261,7 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 		/* Restore the original data so that we do not resend the pkt
 		 * data multiple times.
 		 */
+		printk("RESTORING");
 		conn->send_data_total -= len;
 
 		if (orig_buf) {
@@ -2492,6 +2511,7 @@ int net_tcp_finalize(struct net_pkt *pkt)
 
 	tcp_hdr = (struct net_tcp_hdr *)net_pkt_get_data(pkt, &tcp_access);
 	if (!tcp_hdr) {
+		printk("\nANUS_29\n");
 		return -ENOBUFS;
 	}
 

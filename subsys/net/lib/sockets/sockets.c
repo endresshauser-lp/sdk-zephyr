@@ -656,9 +656,11 @@ ssize_t zsock_sendto_ctx(struct net_context *ctx, const void *buf, size_t len,
 				 * it means that the sending window is blocked
 				 * and we just cannot send anything.
 				 */
+				printk("\nANUS_4\n");
 				int64_t remaining = buf_timeout - sys_clock_tick_get();
 
 				if (remaining <= 0) {
+					printk("\nANUS_5\n");
 					if (status == -ENOBUFS) {
 						errno = ENOMEM;
 					} else {
@@ -858,6 +860,7 @@ static int sock_get_pkt_src_addr(struct net_pkt *pkt,
 		if (!ipv4_hdr ||
 		    net_pkt_acknowledge_data(pkt, &ipv4_access) ||
 		    net_pkt_skip(pkt, net_pkt_ipv4_opts_len(pkt))) {
+			printk("\nANUS_6\n");
 			ret = -ENOBUFS;
 			goto error;
 		}
@@ -881,6 +884,7 @@ static int sock_get_pkt_src_addr(struct net_pkt *pkt,
 		if (!ipv6_hdr ||
 		    net_pkt_acknowledge_data(pkt, &ipv6_access) ||
 		    net_pkt_skip(pkt, net_pkt_ipv6_ext_len(pkt))) {
+			printk("\nANUS_7\n");
 			ret = -ENOBUFS;
 			goto error;
 		}
@@ -899,6 +903,7 @@ static int sock_get_pkt_src_addr(struct net_pkt *pkt,
 		udp_hdr = (struct net_udp_hdr *)net_pkt_get_data(pkt,
 								 &udp_access);
 		if (!udp_hdr) {
+			printk("\nANUS_8\n");
 			ret = -ENOBUFS;
 			goto error;
 		}
@@ -911,6 +916,7 @@ static int sock_get_pkt_src_addr(struct net_pkt *pkt,
 		tcp_hdr = (struct net_tcp_hdr *)net_pkt_get_data(pkt,
 								 &tcp_access);
 		if (!tcp_hdr) {
+			printk("\nANUS_9\n");
 			ret = -ENOBUFS;
 			goto error;
 		}
@@ -1071,6 +1077,7 @@ static inline ssize_t zsock_recv_dgram(struct net_context *ctx,
 	read_len = MIN(recv_len, max_len);
 
 	if (net_pkt_read(pkt, buf, read_len)) {
+		printk("\nANUS_10\n");
 		errno = ENOBUFS;
 		goto fail;
 	}
@@ -1171,6 +1178,7 @@ static inline ssize_t zsock_recv_stream(struct net_context *ctx,
 
 		/* Actually copy data to application buffer */
 		if (net_pkt_read(pkt, (uint8_t *)buf + recv_len, read_len)) {
+			printk("\nANUS_11\n");
 			errno = ENOBUFS;
 			return -1;
 		}

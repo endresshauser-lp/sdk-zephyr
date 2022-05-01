@@ -1688,6 +1688,7 @@ static int context_sendto(struct net_context *context,
 		   net_context_get_ip_proto(context) == IPPROTO_TCP) {
 
 		ret = context_write_data(pkt, buf, len, msghdr);
+		// Okay, from here it's memcopied
 		if (ret < 0) {
 			goto fail;
 		}
