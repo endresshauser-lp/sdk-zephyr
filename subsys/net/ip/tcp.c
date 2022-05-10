@@ -2240,6 +2240,12 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 	if (tcp_window_full(conn)) {
 		if (conn->send_win == 0) {
 			tcp_out_ext(conn, ACK, NULL, conn->seq - 1);
+
+			/* No point retransmiting if the current TX window size
+			 * is 0.
+			 */
+			ret = -EAGAIN;
+			goto out;
 		}
 
 		/* Trigger resend if the timer is not active */
