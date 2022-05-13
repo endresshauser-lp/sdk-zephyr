@@ -37,6 +37,18 @@ static int sendall(int sock, const void *buf, size_t len)
 		if (out_len < 0) {
 			return -errno;
 		}
+		
+		if (out_len == 0 && len != 0) {
+			struct zsock_pollfd pfd;
+			int pollres;
+
+			pfd.fd = sock;
+			pfd.events = ZSOCK_POLLOUT;
+			pollres = zsock_poll(&pfd, 1, CONFIG_HTTP_CLIENT_SOCKET_POLL_TIMEOUT_MS);
+			if (pollres > 0) {
+				continue;
+			}
+		}
 
 		buf = (const char *)buf + out_len;
 		len -= out_len;
