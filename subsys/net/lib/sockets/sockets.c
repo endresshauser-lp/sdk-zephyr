@@ -295,43 +295,6 @@ static inline int z_vrfy_zsock_close(int sock)
 #include <syscalls/zsock_close_mrsh.c>
 #endif /* CONFIG_USERSPACE */
 
-int z_impl_zsock_shutdown(int sock, int how)
-{
-	const struct socket_op_vtable *vtable;
-	struct k_mutex *lock;
-	void *ctx;
-	int ret;
-
-	ctx = get_sock_vtable(sock, &vtable, &lock);
-	if (ctx == NULL) {
-		errno = EBADF;
-		return -1;
-	}
-
-	if (!vtable->shutdown) {
-		errno = ENOTSUP;
-		return -1;
-	}
-
-	(void)k_mutex_lock(lock, K_FOREVER);
-
-	NET_DBG("shutdown: ctx=%p, fd=%d, how=%d", ctx, sock, how);
-
-	ret = vtable->shutdown(ctx, how);
-
-	k_mutex_unlock(lock);
-
-	return ret;
-}
-
-#ifdef CONFIG_USERSPACE
-static inline int z_vrfy_zsock_shutdown(int sock, int how)
-{
-	return z_impl_zsock_shutdown(sock, how);
-}
-#include <syscalls/zsock_shutdown_mrsh.c>
-#endif /* CONFIG_USERSPACE */
-
 static void zsock_accepted_cb(struct net_context *new_ctx,
 			      struct sockaddr *addr, socklen_t addrlen,
 			      int status, void *user_data) {
@@ -2112,40 +2075,6 @@ int zsock_getpeername_ctx(struct net_context *ctx, struct sockaddr *addr,
 	return 0;
 }
 
-int z_impl_zsock_getpeername(int sock, struct sockaddr *addr,
-			     socklen_t *addrlen)
-{
-	VTABLE_CALL(getpeername, sock, addr, addrlen);
-}
-
-#ifdef CONFIG_USERSPACE
-static inline int z_vrfy_zsock_getpeername(int sock, struct sockaddr *addr,
-					   socklen_t *addrlen)
-{
-	socklen_t addrlen_copy;
-	int ret;
-
-	Z_OOPS(z_user_from_copy(&addrlen_copy, (void *)addrlen,
-				sizeof(socklen_t)));
-
-	if (Z_SYSCALL_MEMORY_WRITE(addr, addrlen_copy)) {
-		errno = EFAULT;
-		return -1;
-	}
-
-	ret = z_impl_zsock_getpeername(sock, (struct sockaddr *)addr,
-				       &addrlen_copy);
-
-	if (ret == 0 &&
-	    z_user_to_copy((void *)addrlen, &addrlen_copy,
-			   sizeof(socklen_t))) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	return ret;
-}
-
 int zsock_getsockname_ctx(struct net_context *ctx, struct sockaddr *addr,
 			  socklen_t *addrlen)
 {
@@ -2364,11 +2293,6 @@ static int sock_close_vmeth(void *obj)
 {
 	return zsock_close_ctx(obj);
 }
-static int sock_getpeername_vmeth(void *obj, struct sockaddr *addr,
-				  socklen_t *addrlen)
-{
-	return zsock_getpeername_ctx(obj, addr, addrlen);
-}
 
 static int sock_getsockname_vmeth(void *obj, struct sockaddr *addr,
 				  socklen_t *addrlen)
@@ -2383,7 +2307,6 @@ const struct socket_op_vtable sock_fd_op_vtable = {
 		.close = sock_close_vmeth,
 		.ioctl = sock_ioctl_vmeth,
 	},
-	.shutdown = sock_shutdown_vmeth,
 	.bind = sock_bind_vmeth,
 	.connect = sock_connect_vmeth,
 	.listen = sock_listen_vmeth,
@@ -2393,7 +2316,6 @@ const struct socket_op_vtable sock_fd_op_vtable = {
 	.recvfrom = sock_recvfrom_vmeth,
 	.getsockopt = sock_getsockopt_vmeth,
 	.setsockopt = sock_setsockopt_vmeth,
-	.getpeername = sock_getpeername_vmeth,
 	.getsockname = sock_getsockname_vmeth,
 };
 

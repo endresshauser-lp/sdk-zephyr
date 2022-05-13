@@ -452,7 +452,6 @@ static bool tcp_send_process_no_lock(struct tcp *conn)
 {
 	bool unref = false;
 	struct net_pkt *pkt;
-	bool local = false;
 
 	pkt = tcp_slist(conn, &conn->send_queue, peek_head,
 			struct net_pkt, next);
@@ -488,9 +487,6 @@ static bool tcp_send_process_no_lock(struct tcp *conn)
 			goto out;
 		}
 
-		if (is_destination_local(pkt)) {
-			local = true;
-		}
 
 		tcp_send(pkt);
 
@@ -504,9 +500,6 @@ static bool tcp_send_process_no_lock(struct tcp *conn)
 	if (conn->in_retransmission) {
 		k_work_reschedule_for_queue(&tcp_work_q, &conn->send_timer,
 					    K_MSEC(tcp_rto));
-	} else if (local && !sys_slist_is_empty(&conn->send_queue)) {
-		k_work_reschedule_for_queue(&tcp_work_q, &conn->send_timer,
-					    K_NO_WAIT);
 	}
 
 out:
