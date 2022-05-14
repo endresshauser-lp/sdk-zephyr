@@ -898,7 +898,7 @@ static inline void net_buf_simple_restore(struct net_buf_simple *buf,
  * Flag indicating that the buffer's associated data pointer, points to
  * externally allocated memory. Therefore once ref goes down to zero, the
  * pointed data will not need to be deallocated. This never needs to be
- * explicitly set or unet by the net_buf API user. Such net_buf is
+ * explicitly set or unset by the net_buf API user. Such net_buf is
  * exclusively instantiated via net_buf_alloc_with_data() function.
  * Reference count mechanism however will behave the same way, and ref
  * count going to 0 will free the net_buf but no the data pointer in it.
@@ -1045,16 +1045,17 @@ struct net_buf_pool {
 	}
 #endif /* CONFIG_NET_BUF_POOL_USAGE */
 
-#define _NET_BUF_ARRAY_DEFINE(_name, _count, _ud_size)                                    \
-	struct _net_buf_##_name {struct net_buf b; uint8_t ud[_ud_size]; };               \
-	BUILD_ASSERT(_ud_size <= UINT8_MAX);                                              \
-	BUILD_ASSERT(offsetof(struct net_buf, user_data) ==                               \
-		offsetof(struct _net_buf_##_name, ud), "Invalid offset");                 \
-	BUILD_ASSERT(__alignof__(struct net_buf) ==                                       \
-		__alignof__(struct _net_buf_##_name), "Invalid alignment");               \
-	BUILD_ASSERT(sizeof(struct _net_buf_##_name) ==                                   \
-		ROUND_UP(sizeof(struct net_buf) + _ud_size, __alignof__(struct net_buf)), \
-		"Size cannot be determined");                                             \
+#define _NET_BUF_ARRAY_DEFINE(_name, _count, _ud_size)					       \
+	struct _net_buf_##_name { uint8_t b[sizeof(struct net_buf)];			       \
+				  uint8_t ud[_ud_size]; } __net_buf_align;		       \
+	BUILD_ASSERT(_ud_size <= UINT8_MAX);						       \
+	BUILD_ASSERT(offsetof(struct net_buf, user_data) ==				       \
+		     offsetof(struct _net_buf_##_name, ud), "Invalid offset");		       \
+	BUILD_ASSERT(__alignof__(struct net_buf) ==					       \
+		     __alignof__(struct _net_buf_##_name), "Invalid alignment");	       \
+	BUILD_ASSERT(sizeof(struct _net_buf_##_name) ==					       \
+		     ROUND_UP(sizeof(struct net_buf) + _ud_size, __alignof__(struct net_buf)), \
+		     "Size cannot be determined");					       \
 	static struct _net_buf_##_name _net_buf_##_name[_count] __noinit
 
 extern const struct net_buf_data_alloc net_buf_heap_alloc;
