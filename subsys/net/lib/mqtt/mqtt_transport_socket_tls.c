@@ -22,15 +22,20 @@ int mqtt_client_tls_connect(struct mqtt_client *client)
 {
 	const struct sockaddr *broker = client->broker;
 	struct mqtt_sec_config *tls_config = &client->transport.tls.config;
+	int type = SOCK_STREAM;
 	int ret;
 
+	if (tls_config->set_native_tls) {
+		type |= SOCK_NATIVE_TLS;
+	}
+
 	client->transport.tls.sock = zsock_socket(broker->sa_family,
-						  SOCK_STREAM, IPPROTO_TLS_1_2);
+						  type, IPPROTO_TLS_1_2);
 	if (client->transport.tls.sock < 0) {
 		return -errno;
 	}
 
-	MQTT_TRC("Created socket %d", client->transport.tls.sock);
+	NET_DBG("Created socket %d", client->transport.tls.sock);
 
 #if defined(CONFIG_SOCKS)
 	if (client->transport.proxy.addrlen != 0) {
@@ -109,7 +114,7 @@ int mqtt_client_tls_connect(struct mqtt_client *client)
 		goto error;
 	}
 
-	MQTT_TRC("Connect completed");
+	NET_DBG("Connect completed");
 	return 0;
 
 error:
@@ -197,7 +202,7 @@ int mqtt_client_tls_disconnect(struct mqtt_client *client)
 {
 	int ret;
 
-	MQTT_TRC("Closing socket %d", client->transport.tls.sock);
+	NET_INFO("Closing socket %d", client->transport.tls.sock);
 	ret = zsock_close(client->transport.tls.sock);
 	if (ret < 0) {
 		return -errno;

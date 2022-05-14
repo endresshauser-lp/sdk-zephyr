@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(net_if, CONFIG_NET_IF_LOG_LEVEL);
 #include <syscall_handler.h>
 #include <stdlib.h>
 #include <string.h>
+#include <net/igmp.h>
 #include <net/net_core.h>
 #include <net/net_pkt.h>
 #include <net/net_if.h>
@@ -577,11 +578,11 @@ struct net_if *net_if_get_default(void)
 #if defined(CONFIG_NET_DEFAULT_IF_CANBUS_RAW)
 	iface = net_if_get_first_by_type(&NET_L2_GET_NAME(CANBUS_RAW));
 #endif
-#if defined(CONFIG_NET_DEFAULT_IF_CANBUS)
-	iface = net_if_get_first_by_type(&NET_L2_GET_NAME(CANBUS));
-#endif
 #if defined(CONFIG_NET_DEFAULT_IF_PPP)
 	iface = net_if_get_first_by_type(&NET_L2_GET_NAME(PPP));
+#endif
+#if defined(CONFIG_NET_DEFAULT_IF_UP)
+	iface = net_if_get_first_up();
 #endif
 
 	return iface ? iface : _net_if_list_start;
@@ -596,6 +597,17 @@ struct net_if *net_if_get_first_by_type(const struct net_l2 *l2)
 		}
 
 		if (net_if_l2(iface) == l2) {
+			return iface;
+		}
+	}
+
+	return NULL;
+}
+
+struct net_if *net_if_get_first_up(void)
+{
+	STRUCT_SECTION_FOREACH(net_if, iface) {
+		if (net_if_flag_is_set(iface, NET_IF_UP)) {
 			return iface;
 		}
 	}
@@ -2783,7 +2795,7 @@ static void iface_ipv6_init(int if_count)
 	k_work_init_delayable(&prefix_lifetime_timer, prefix_lifetime_timeout);
 
 	if (if_count > ARRAY_SIZE(ipv6_addresses)) {
-		NET_WARN("You have %lu IPv6 net_if addresses but %d "
+		NET_WARN("You have %zu IPv6 net_if addresses but %d "
 			 "network interfaces", ARRAY_SIZE(ipv6_addresses),
 			 if_count);
 		NET_WARN("Consider increasing CONFIG_NET_IF_MAX_IPV6_COUNT "
@@ -3779,7 +3791,7 @@ static void iface_ipv4_init(int if_count)
 	int i;
 
 	if (if_count > ARRAY_SIZE(ipv4_addresses)) {
-		NET_WARN("You have %lu IPv4 net_if addresses but %d "
+		NET_WARN("You have %zu IPv4 net_if addresses but %d "
 			 "network interfaces", ARRAY_SIZE(ipv4_addresses),
 			 if_count);
 		NET_WARN("Consider increasing CONFIG_NET_IF_MAX_IPV4_COUNT "
@@ -3791,7 +3803,27 @@ static void iface_ipv4_init(int if_count)
 	}
 }
 
+static void leave_ipv4_mcast_all(struct net_if *iface)
+{
+	struct net_if_ipv4 *ipv4 = iface->config.ip.ipv4;
+	int i;
+
+	if (!ipv4) {
+		return;
+	}
+
+	for (i = 0; i < NET_IF_MAX_IPV4_MADDR; i++) {
+		if (!ipv4->mcast[i].is_used ||
+		    !ipv4->mcast[i].is_joined) {
+			continue;
+		}
+
+		net_ipv4_igmp_leave(iface, &ipv4->mcast[i].address.in_addr);
+	}
+}
+
 #else
+#define leave_ipv4_mcast_all(...)
 #define iface_ipv4_init(...)
 
 struct net_if_mcast_addr *net_if_ipv4_maddr_lookup(const struct in_addr *addr,
@@ -4065,6 +4097,7 @@ int net_if_down(struct net_if *iface)
 	k_mutex_lock(&lock, K_FOREVER);
 
 	leave_mcast_all(iface);
+	leave_ipv4_mcast_all(iface);
 
 	if (net_if_is_ip_offloaded(iface)) {
 		goto done;

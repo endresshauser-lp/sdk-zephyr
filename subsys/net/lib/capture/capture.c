@@ -33,9 +33,6 @@ LOG_MODULE_REGISTER(net_capture, CONFIG_NET_CAPTURE_LOG_LEVEL);
 #define DEBUG_TX 0
 #endif
 
-#define DEV_DATA(dev) \
-	((struct net_capture *)(dev)->data)
-
 static K_MUTEX_DEFINE(lock);
 
 NET_PKT_SLAB_DEFINE(capture_pkts, CONFIG_NET_CAPTURE_PKT_COUNT);
@@ -450,7 +447,7 @@ fail:
 
 static int capture_cleanup(const struct device *dev)
 {
-	struct net_capture *ctx = DEV_DATA(dev);
+	struct net_capture *ctx = dev->data;
 
 	(void)net_capture_disable(dev);
 	(void)net_virtual_interface_attach(ctx->tunnel_iface, NULL);
@@ -469,14 +466,14 @@ static int capture_cleanup(const struct device *dev)
 
 static bool capture_is_enabled(const struct device *dev)
 {
-	struct net_capture *ctx = DEV_DATA(dev);
+	struct net_capture *ctx = dev->data;
 
 	return ctx->is_enabled ? true : false;
 }
 
 static int capture_enable(const struct device *dev, struct net_if *iface)
 {
-	struct net_capture *ctx = DEV_DATA(dev);
+	struct net_capture *ctx = dev->data;
 
 	if (ctx->is_enabled) {
 		return -EALREADY;
@@ -499,7 +496,7 @@ static int capture_enable(const struct device *dev, struct net_if *iface)
 
 static int capture_disable(const struct device *dev)
 {
-	struct net_capture *ctx = DEV_DATA(dev);
+	struct net_capture *ctx = dev->data;
 
 	ctx->capture_iface = NULL;
 	ctx->is_enabled = false;
@@ -565,7 +562,7 @@ out:
 
 static int capture_dev_init(const struct device *dev)
 {
-	struct net_capture *ctx = DEV_DATA(dev);
+	struct net_capture *ctx = dev->data;
 
 	k_mutex_lock(&lock, K_FOREVER);
 
@@ -583,7 +580,7 @@ static int capture_dev_init(const struct device *dev)
 static int capture_send(const struct device *dev, struct net_if *iface,
 			struct net_pkt *pkt)
 {
-	struct net_capture *ctx = DEV_DATA(dev);
+	struct net_capture *ctx = dev->data;
 	enum net_verdict verdict;
 	struct net_pkt *ip;
 	int ret;
@@ -694,7 +691,7 @@ static const struct net_capture_interface_api capture_interface_api = {
 };
 
 #define DEFINE_NET_CAPTURE_DEV_DATA(x, _)				\
-	static struct net_capture capture_dev_data_##x;
+	static struct net_capture capture_dev_data_##x
 
 #define DEFINE_NET_CAPTURE_DEVICE(x, _)					\
 	DEVICE_DEFINE(net_capture_##x,					\
@@ -705,7 +702,7 @@ static const struct net_capture_interface_api capture_interface_api = {
 		      NULL,						\
 		      POST_KERNEL,					\
 		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
-		      &capture_interface_api);
+		      &capture_interface_api)
 
-UTIL_LISTIFY(CONFIG_NET_CAPTURE_DEVICE_COUNT, DEFINE_NET_CAPTURE_DEV_DATA, _)
-UTIL_LISTIFY(CONFIG_NET_CAPTURE_DEVICE_COUNT, DEFINE_NET_CAPTURE_DEVICE, _)
+LISTIFY(CONFIG_NET_CAPTURE_DEVICE_COUNT, DEFINE_NET_CAPTURE_DEV_DATA, (;), _);
+LISTIFY(CONFIG_NET_CAPTURE_DEVICE_COUNT, DEFINE_NET_CAPTURE_DEVICE, (;), _);
