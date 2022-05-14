@@ -158,7 +158,7 @@ static uint8_t tx_tc2thread(uint8_t tc)
 	 * priority.
 	 */
 	static const uint8_t thread_priorities[] = {
-		LISTIFY(NET_TC_TX_COUNT, PRIO_TX, (,))
+		UTIL_LISTIFY(NET_TC_TX_COUNT, PRIO_TX)
 	};
 
 	BUILD_ASSERT(NET_TC_TX_COUNT <= CONFIG_NUM_COOP_PRIORITIES,
@@ -175,7 +175,7 @@ static uint8_t tx_tc2thread(uint8_t tc)
 static uint8_t rx_tc2thread(uint8_t tc)
 {
 	static const uint8_t thread_priorities[] = {
-		LISTIFY(NET_TC_RX_COUNT, PRIO_RX, (,))
+		UTIL_LISTIFY(NET_TC_RX_COUNT, PRIO_RX)
 	};
 
 	BUILD_ASSERT(NET_TC_RX_COUNT <= CONFIG_NUM_COOP_PRIORITIES,
