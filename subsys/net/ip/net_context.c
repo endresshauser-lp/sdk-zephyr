@@ -1039,8 +1039,6 @@ int net_context_connect(struct net_context *context,
 
 		/* FIXME - Add multicast and broadcast address check */
 
-		addr4 = (struct sockaddr_in *)&context->remote;
-
 		memcpy(&addr4->sin_addr, &net_sin(addr)->sin_addr,
 		       sizeof(struct in_addr));
 
@@ -1568,15 +1566,18 @@ static int context_sendto(struct net_context *context,
 			return -EINVAL;
 		}
 
-		if (ll_addr->sll_ifindex < 0) {
-			return -EDESTADDRREQ;
-		}
+		iface = net_context_get_iface(context);
+		if (iface == NULL) {
+			if (ll_addr->sll_ifindex < 0) {
+				return -EDESTADDRREQ;
+			}
 
-		iface = net_if_get_by_index(ll_addr->sll_ifindex);
-		if (!iface) {
-			NET_ERR("Cannot bind to interface index %d",
-				ll_addr->sll_ifindex);
-			return -EDESTADDRREQ;
+			iface = net_if_get_by_index(ll_addr->sll_ifindex);
+			if (iface == NULL) {
+				NET_ERR("Cannot bind to interface index %d",
+					ll_addr->sll_ifindex);
+				return -EDESTADDRREQ;
+			}
 		}
 
 		if (net_context_get_type(context) == SOCK_DGRAM) {
@@ -1660,6 +1661,11 @@ static int context_sendto(struct net_context *context,
 	tmp_len = net_pkt_available_payload_buffer(
 				pkt, net_context_get_ip_proto(context));
 	if (tmp_len < len) {
+		if (net_context_get_type(context) == SOCK_DGRAM) {
+			NET_ERR("Available payload buffer (%zu) is not enough for requested DGRAM (%zu)",
+				tmp_len, len);
+			return -ENOMEM;
+		}
 		len = tmp_len;
 	}
 

@@ -197,7 +197,7 @@ static int tcp_endpoint_set(union tcp_endpoint *ep, struct net_pkt *pkt,
 			net_ipv6_addr_copy_raw((uint8_t *)&ep->sin6.sin6_addr,
 					       src == TCP_EP_SRC ?
 							ip->src : ip->dst);
- 			ep->sa.sa_family = AF_INET6;
+			ep->sa.sa_family = AF_INET6;
 		} else {
 			ret = -EINVAL;
 		}

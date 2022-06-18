@@ -278,6 +278,13 @@ enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 		goto drop;
 	}
 
+	if (net_ipv4_is_addr_unspecified((struct in_addr *)hdr->src) &&
+	    !net_ipv4_is_addr_bcast(net_pkt_iface(pkt), (struct in_addr *)hdr->dst)) {
+		NET_DBG("DROP: src addr is %s", "unspecified");
+		goto drop;
+	}
+
+
 	if (net_if_need_calc_rx_checksum(net_pkt_iface(pkt)) &&
 	    net_calc_chksum_ipv4(pkt) != 0U) {
 		NET_DBG("DROP: invalid chksum");
