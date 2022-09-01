@@ -2114,7 +2114,7 @@ static enum net_verdict tcp_in(struct tcp *conn, struct net_pkt *pkt)
 			 * while waiting acks.
 			 */
 			max_win = (CONFIG_NET_BUF_TX_COUNT *
-				   CONFIG_NET_BUF_DATA_SIZE) / 3;
+				   CONFIG_NET_BUF_DATA_SIZE) / CONFIG_NET_TCP_RETRY_COUNT;
 		}
 
 		if (sndbuf_opt > 0) {
