@@ -836,14 +836,39 @@ static int tls_tx(void *ctx, const unsigned char *buf, size_t len)
 {
 	struct tls_context *tls_ctx = ctx;
 	ssize_t sent;
+	size_t retrycount = 0;
 
-	sent = zsock_sendto(tls_ctx->sock, buf, len,
-			    tls_ctx->flags, NULL, 0);
+	//ToDo: probably replace loop with socket polling
+	/* If the network is slow and therefore the send window
+	 * is full we receive EAGAIN. The mbedTLS stack forwards
+	 * this information to the application in order to repeat
+	 * the send request. This is correct behavior from Zephyr
+	 * and mbedTLS.
+	 *
+	 * Problem: The application can only resent the complete
+	 * data and not just the remaining unsent data, which
+	 * leads to the same problem again.
+	 *
+	 * Workaround: Try resends here for the remaining data
+	 * here until we have solved the problem of slow network
+	 * speed and/or larger send window sizes.
+	 */
+	do {
+		sent = zsock_sendto(tls_ctx->sock, buf, len,
+		                    tls_ctx->flags, NULL, 0);
+		retrycount++;
+	} while (sent < 0 && errno == EAGAIN && retrycount < CONFIG_NET_SOCKETS_TLS_TX_MAX_RETRY_LEVEL);
+
+	if (retrycount > CONFIG_NET_SOCKETS_TLS_TX_RETRY_WARN_LEVEL) {
+		LOG_WRN("Retried %d times to send packet.", retrycount);
+	} else if (retrycount > 1) {
+		LOG_INF("Retried %d times to send packet.", retrycount);
+	}
+
 	if (sent < 0) {
 		if (errno == EAGAIN) {
 			return MBEDTLS_ERR_SSL_WANT_WRITE;
 		}
-
 		return MBEDTLS_ERR_NET_SEND_FAILED;
 	}
 
