@@ -1574,6 +1574,7 @@ __syscall int64_t k_uptime_ticks(void);
  */
 static inline int64_t k_uptime_get(void)
 {
+	// ToDo casts: here and intern
 	return k_ticks_to_ms_floor64(k_uptime_ticks());
 }
 
