@@ -1172,13 +1172,6 @@ static int sdmmc_read_status(struct sd_card *card)
 /* Waits for SD card to be ready for data. Returns 0 if card is ready */
 static int sdmmc_wait_ready(struct sd_card *card)
 {
-	// START OF WORKAROUND, lum, 07.11.2022
-	// Workaround for a bug that is reported here: https://devzone.nordicsemi.com/f/nordic-q-a/93470/sd-card-issues-after-updating-to-sdk-2-1
-	// Tested this by writing a huge amount of data to a file. Seems to be working.
-	// We do the same as done further below, we just don't wait, we immediately check if the sd card is ok.
-	return (sd_retry(sdmmc_read_status, card, CONFIG_SD_RETRY_COUNT) != 0);
-	// END OF WORKAROUND
-
 	int ret, timeout = CONFIG_SD_DATA_TIMEOUT * 1000;
 	bool busy = true;
 
