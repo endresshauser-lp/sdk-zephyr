@@ -93,12 +93,12 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
 		return -1;
 	}
 
-	uint64_t elapsed_nsecs = k_ticks_to_ns_floor64(k_uptime_ticks());
-	int64_t delta = (int64_t)NSEC_PER_SEC * tp->tv_sec + tp->tv_nsec
-		- elapsed_nsecs;
+	uint64_t elapsed_millisecs = k_ticks_to_ms_floor64(k_uptime_ticks());
+	int64_t delta = (int64_t)MSEC_PER_SEC * tp->tv_sec + (tp->tv_nsec / (NSEC_PER_MSEC))
+		- elapsed_millisecs;
 
-	base.tv_sec = delta / NSEC_PER_SEC;
-	base.tv_nsec = delta % NSEC_PER_SEC;
+	base.tv_sec = delta / MSEC_PER_SEC;
+	base.tv_nsec = delta * NSEC_PER_MSEC;
 
 	key = k_spin_lock(&rt_clock_base_lock);
 	rt_clock_base = base;
