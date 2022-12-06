@@ -98,7 +98,7 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
 		- elapsed_millisecs;
 
 	base.tv_sec = delta / MSEC_PER_SEC;
-	base.tv_nsec = delta * NSEC_PER_MSEC;
+	base.tv_nsec = (delta - (base.tv_sec * MSEC_PER_SEC)) * NSEC_PER_MSEC;
 
 	key = k_spin_lock(&rt_clock_base_lock);
 	rt_clock_base = base;
