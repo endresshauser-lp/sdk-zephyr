@@ -527,4 +527,8 @@ static int fatfs_init(void)
 	return fs_register(FS_FATFS, &fatfs_fs);
 }
 
+#ifdef CONFIG_FAT_FILESYSTEM_EARLY_INIT
+SYS_INIT(fatfs_init, POST_KERNEL, CONFIG_FAT_FILESYSTEM_EARLY_INIT_PRIORITY);
+#else
 SYS_INIT(fatfs_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif

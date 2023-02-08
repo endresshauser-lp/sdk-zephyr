@@ -87,6 +87,19 @@ config FS_FATFS_NUM_DIRS
 	  at compile-time.
 	  This affects use of fs_opendir on FAT type mounted file systems.
 
+config FAT_FILESYSTEM_EARLY_INIT
+	bool "Initialize FAT driver with POST_KERNEL runlevel."
+	select DISK_ACCESS
+	default n
+
+if FAT_FILESYSTEM_EARLY_INIT
+
+config FAT_FILESYSTEM_EARLY_INIT_PRIORITY
+	int "Early init priority of custom FAT driver."
+	default 50
+
+endif # FAT_FILESYSTEM_EARLY_INIT
+
 config FS_FATFS_LFN
 	bool "Long filenames (LFN)"
 	help
