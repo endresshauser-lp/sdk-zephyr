@@ -68,6 +68,8 @@ static const struct socket_op_vtable tls_sock_fd_op_vtable;
 #define MBEDTLS_ERR_SSL_PEER_VERIFY_FAILED MBEDTLS_ERR_SSL_UNEXPECTED_MESSAGE
 #endif
 
+#define TLS_CLIENT_SOCKET_POLL_TIMEOUT_MS 5000
+
 /** A list of secure tags that TLS context should use. */
 struct sec_tag_list {
 	/** An array of secure tags referencing TLS credentials. */
@@ -707,20 +709,37 @@ static void dtls_peer_address_get(struct tls_context *context,
 static int dtls_tx(void *ctx, const unsigned char *buf, size_t len)
 {
 	struct tls_context *tls_ctx = ctx;
-	ssize_t sent;
+	ssize_t out_len;
 
-	sent = zsock_sendto(tls_ctx->sock, buf, len, tls_ctx->flags,
-			    &tls_ctx->dtls_peer_addr,
-			    tls_ctx->dtls_peer_addrlen);
-	if (sent < 0) {
-		if (errno == EAGAIN) {
-			return MBEDTLS_ERR_SSL_WANT_WRITE;
+	while (len) {
+		out_len = zsock_sendto(tls_ctx->sock, buf, len, tls_ctx->flags,
+				       &tls_ctx->dtls_peer_addr, tls_ctx->dtls_peer_addrlen);
+		if ((out_len == 0) || (out_len < 0 && errno == EAGAIN)) {
+			struct zsock_pollfd pfd;
+			int pollres;
+
+			pfd.fd = tls_ctx->sock;
+			pfd.events = ZSOCK_POLLOUT;
+			pollres = zsock_poll(&pfd, 1, TLS_CLIENT_SOCKET_POLL_TIMEOUT_MS);
+			if (pollres >= 0) {
+				continue;
+			} else {
+				return -errno;
+			}
+		} else if (out_len < 0) {
+			return -errno;
 		}
 
-		return MBEDTLS_ERR_NET_SEND_FAILED;
+		if (out_len < 0) {
+			// ToDo: shouldn't we return errno here?
+			return MBEDTLS_ERR_NET_SEND_FAILED;
+		}
+
+		buf = (const char *)buf + out_len;
+		len -= out_len;
 	}
 
-	return sent;
+	return out_len;
 }
 
 static int dtls_rx(void *ctx, unsigned char *buf, size_t len,
@@ -807,22 +826,42 @@ static int dtls_rx(void *ctx, unsigned char *buf, size_t len,
 }
 #endif /* CONFIG_NET_SOCKETS_ENABLE_DTLS */
 
+
+
 static int tls_tx(void *ctx, const unsigned char *buf, size_t len)
 {
 	struct tls_context *tls_ctx = ctx;
-	ssize_t sent;
+	ssize_t out_len;
 
-	sent = zsock_sendto(tls_ctx->sock, buf, len,
-			    tls_ctx->flags, NULL, 0);
-	if (sent < 0) {
-		if (errno == EAGAIN) {
-			return MBEDTLS_ERR_SSL_WANT_WRITE;
+	while (len) {
+		out_len = zsock_sendto(tls_ctx->sock, buf, len, tls_ctx->flags, NULL, 0);
+
+		if ((out_len == 0) || (out_len < 0 && errno == EAGAIN)) {
+			struct zsock_pollfd pfd;
+			int pollres;
+
+			pfd.fd = tls_ctx->sock;
+			pfd.events = ZSOCK_POLLOUT;
+			pollres = zsock_poll(&pfd, 1, TLS_CLIENT_SOCKET_POLL_TIMEOUT_MS);
+			if (pollres >= 0) {
+				continue;
+			} else {
+				return -errno;
+			}
+		} else if (out_len < 0) {
+			return -errno;
 		}
 
-		return MBEDTLS_ERR_NET_SEND_FAILED;
+		if (out_len < 0) {
+			// ToDo: shouldn't we return errno here?
+			return MBEDTLS_ERR_NET_SEND_FAILED;
+		}
+
+		buf = (const char *)buf + out_len;
+		len -= out_len;
 	}
 
-	return sent;
+	return out_len;
 }
 
 static int tls_rx(void *ctx, unsigned char *buf, size_t len)
