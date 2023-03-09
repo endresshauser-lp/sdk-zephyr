@@ -831,7 +831,7 @@ static int dtls_rx(void *ctx, unsigned char *buf, size_t len,
 static int tls_tx(void *ctx, const unsigned char *buf, size_t len)
 {
 	struct tls_context *tls_ctx = ctx;
-	ssize_t out_len;
+	ssize_t out_len = 0;
 
 	while (len) {
 		out_len = zsock_sendto(tls_ctx->sock, buf, len, tls_ctx->flags, NULL, 0);
