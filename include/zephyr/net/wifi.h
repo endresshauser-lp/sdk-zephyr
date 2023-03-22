@@ -12,6 +12,8 @@
 #ifndef ZEPHYR_INCLUDE_NET_WIFI_H_
 #define ZEPHYR_INCLUDE_NET_WIFI_H_
 
+#define WIFI_COUNTRY_CODE_LEN 2
+
 /* Not having support for legacy types is deliberate to enforce
  * higher security.
  */
@@ -250,20 +252,10 @@ enum wifi_ps {
 	WIFI_PS_ENABLED,
 };
 
-/**
- * wifi_ps_txt - Get the power save setting as a text string
- */
-static inline const char *wifi_ps_txt(enum wifi_ps ps)
-{
-	switch (ps) {
-	case WIFI_PS_DISABLED:
-		return "Power save disabled";
-	case WIFI_PS_ENABLED:
-		return "Power save enabled";
-	default:
-		return "Power save unknown";
-	}
-}
+static const char * const wifi_ps2str[] = {
+	[WIFI_PS_DISABLED] = "Power save disabled",
+	[WIFI_PS_ENABLED] = "Power save enabled",
+};
 
 enum wifi_ps_mode {
 	WIFI_PS_MODE_LEGACY = 0,
@@ -273,40 +265,20 @@ enum wifi_ps_mode {
 	WIFI_PS_MODE_WMM,
 };
 
-/**
- * wifi_ps_mode_txt - Get the power save mode type as a text string
- */
-static inline const char *wifi_ps_mode_txt(enum wifi_ps_mode ps_mode)
-{
-	switch (ps_mode) {
-	case WIFI_PS_MODE_LEGACY:
-		return "Legacy power save";
-	case WIFI_PS_MODE_WMM:
-		return "WMM power save";
-	default:
-		return "Power save mode unknown";
-	}
-}
+static const char * const wifi_ps_mode2str[] = {
+	[WIFI_PS_MODE_LEGACY] = "Legacy power save",
+	[WIFI_PS_MODE_WMM] = "WMM power save",
+};
 
 enum wifi_twt_operation {
 	WIFI_TWT_SETUP = 0,
 	WIFI_TWT_TEARDOWN,
 };
 
-/**
- * wifi_twt_operation_txt - Get the TWT operation type as a text string
- */
-static inline const char *wifi_twt_operation_txt(enum wifi_twt_operation op)
-{
-	switch (op) {
-	case WIFI_TWT_SETUP:
-		return "TWT setup";
-	case WIFI_TWT_TEARDOWN:
-		return "TWT teardown";
-	default:
-		return "TWT operation unknown";
-	}
-}
+static const char * const wifi_twt_operation2str[] = {
+	[WIFI_TWT_SETUP] = "TWT setup",
+	[WIFI_TWT_TEARDOWN] = "TWT teardown",
+};
 
 enum wifi_twt_negotiation_type {
 	WIFI_TWT_INDIVIDUAL = 0,
@@ -314,22 +286,11 @@ enum wifi_twt_negotiation_type {
 	WIFI_TWT_WAKE_TBTT
 };
 
-/**
- * wifi_twt_negotiation_type_txt - Get the TWT negotiation type as a text string
- */
-static inline const char *wifi_twt_negotiation_type_txt(enum wifi_twt_negotiation_type type)
-{
-	switch (type) {
-	case WIFI_TWT_INDIVIDUAL:
-		return "TWT individual negotiation";
-	case WIFI_TWT_BROADCAST:
-		return "TWT broadcast negotiation";
-	case WIFI_TWT_WAKE_TBTT:
-		return "TWT wake TBTT negotiation";
-	default:
-		return "TWT negotiation type unknown";
-	}
-}
+static const char * const wifi_twt_negotiation_type2str[] = {
+	[WIFI_TWT_INDIVIDUAL] = "TWT individual negotiation",
+	[WIFI_TWT_BROADCAST] = "TWT broadcast negotiation",
+	[WIFI_TWT_WAKE_TBTT] = "TWT wake TBTT negotiation",
+};
 
 enum wifi_twt_setup_cmd {
 	/* TWT Requests */
@@ -344,32 +305,23 @@ enum wifi_twt_setup_cmd {
 	WIFI_TWT_SETUP_CMD_REJECT,
 };
 
-/**
- * wifi_twt_setup_cmd_txt - Get the TWT setup command type as a text string
- */
-static inline const char *wifi_twt_setup_cmd_txt(enum wifi_twt_setup_cmd cmd)
-{
-	switch (cmd) {
+static const char * const wifi_twt_setup_cmd2str[] = {
 	/* TWT Requests */
-	case WIFI_TWT_SETUP_CMD_REQUEST:
-		return "TWT request";
-	case WIFI_TWT_SETUP_CMD_SUGGEST:
-		return "TWT suggest";
-	case WIFI_TWT_SETUP_CMD_DEMAND:
-		return "TWT demand";
+	[WIFI_TWT_SETUP_CMD_REQUEST] = "TWT request",
+	[WIFI_TWT_SETUP_CMD_SUGGEST] = "TWT suggest",
+	[WIFI_TWT_SETUP_CMD_DEMAND] = "TWT demand",
 	/* TWT Responses */
-	case WIFI_TWT_SETUP_CMD_GROUPING:
-		return "TWT grouping";
-	case WIFI_TWT_SETUP_CMD_ACCEPT:
-		return "TWT accept";
-	case WIFI_TWT_SETUP_CMD_ALTERNATE:
-		return "TWT alternate";
-	case WIFI_TWT_SETUP_CMD_DICTATE:
-		return "TWT dictate";
-	case WIFI_TWT_SETUP_CMD_REJECT:
-		return "TWT reject";
-	default:
-		return "TWT setup command unknown";
-	}
-}
+	[WIFI_TWT_SETUP_CMD_GROUPING] = "TWT grouping",
+	[WIFI_TWT_SETUP_CMD_ACCEPT] = "TWT accept",
+	[WIFI_TWT_SETUP_CMD_ALTERNATE] = "TWT alternate",
+	[WIFI_TWT_SETUP_CMD_DICTATE] = "TWT dictate",
+	[WIFI_TWT_SETUP_CMD_REJECT] = "TWT reject",
+};
+
+enum wifi_twt_setup_resp_status {
+	/* TWT Setup response status */
+	WIFI_TWT_RESP_RECEIVED = 0,
+	WIFI_TWT_RESP_NOT_RECEIVED,
+};
+
 #endif /* ZEPHYR_INCLUDE_NET_WIFI_H_ */

@@ -350,9 +350,6 @@ struct mqtt_sec_config {
 	/** Indicates the list of security tags to be used for the session. */
 	sec_tag_t *sec_tag_list;
 
-	/** Indicates the preference for enabling TLS session caching. */
-	int session_cache;
-
 	/** Peer hostname for ceritificate verification.
 	 *  May be NULL to skip hostname verification.
 	 */
@@ -360,9 +357,6 @@ struct mqtt_sec_config {
 
 	/** Indicates the preference for copying certificates to the heap. */
 	int cert_nocopy;
-
-	/** Set socket to native TLS */
-	bool set_native_tls;
 };
 
 /** @brief MQTT transport type. */

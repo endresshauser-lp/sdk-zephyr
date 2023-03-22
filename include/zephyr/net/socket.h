@@ -27,7 +27,6 @@
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/dns_resolve.h>
 #include <zephyr/net/socket_select.h>
-#include <zephyr/net/socket_ncs.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus
@@ -139,7 +138,6 @@ struct zsock_pollfd {
  */
 #define TLS_DTLS_HANDSHAKE_TIMEOUT_MIN 8
 #define TLS_DTLS_HANDSHAKE_TIMEOUT_MAX 9
-
 /** Socket option for preventing certificates from being copied to the mbedTLS
  *  heap if possible. The option is only effective for DER certificates and is
  *  ignored for PEM certificates.
@@ -954,8 +952,15 @@ struct ifreq {
 #define SO_KEEPALIVE 9
 /** sockopt: Place out-of-band data into receive stream (ignored, for compatibility) */
 #define SO_OOBINLINE 10
+/** sockopt: Socket lingers on close (ignored, for compatibility) */
+#define SO_LINGER 13
 /** sockopt: Allow multiple sockets to reuse a single port (ignored, for compatibility) */
 #define SO_REUSEPORT 15
+
+/** sockopt: Receive low watermark (ignored, for compatibility) */
+#define SO_RCVLOWAT 18
+/** sockopt: Send low watermark (ignored, for compatibility) */
+#define SO_SNDLOWAT 19
 
 /**
  * sockopt: Receive timeout
@@ -1006,6 +1011,9 @@ struct ifreq {
 /* Socket options for SOCKS5 proxy */
 /** sockopt: Enable SOCKS5 for Socket */
 #define SO_SOCKS5 60
+
+/** listen: The maximum backlog queue length (ignored, for compatibility) */
+#define SOMAXCONN 128
 
 /** @cond INTERNAL_HIDDEN */
 /**

@@ -40,6 +40,9 @@ enum net_request_wifi_cmd {
 	NET_REQUEST_WIFI_CMD_PS_MODE,
 	NET_REQUEST_WIFI_CMD_TWT,
 	NET_REQUEST_WIFI_CMD_PS_CONFIG,
+	NET_REQUEST_WIFI_CMD_REG_DOMAIN,
+	NET_REQUEST_WIFI_CMD_PS_TIMEOUT,
+	NET_REQUEST_WIFI_CMD_MAX
 };
 
 #define NET_REQUEST_WIFI_SCAN					\
@@ -91,6 +94,15 @@ NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_TWT);
 	(_NET_WIFI_BASE | NET_REQUEST_WIFI_CMD_PS_CONFIG)
 
 NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_PS_CONFIG);
+#define NET_REQUEST_WIFI_REG_DOMAIN				\
+	(_NET_WIFI_BASE | NET_REQUEST_WIFI_CMD_REG_DOMAIN)
+
+NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_REG_DOMAIN);
+
+#define NET_REQUEST_WIFI_PS_TIMEOUT			\
+	(_NET_WIFI_BASE | NET_REQUEST_WIFI_CMD_PS_TIMEOUT)
+
+NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_PS_TIMEOUT);
 
 enum net_event_wifi_cmd {
 	NET_EVENT_WIFI_CMD_SCAN_RESULT = 1,
@@ -169,6 +181,8 @@ struct wifi_iface_status {
 	enum wifi_security_type security;
 	enum wifi_mfp_options mfp;
 	int rssi;
+	unsigned char dtim_period;
+	unsigned short beacon_interval;
 };
 
 struct wifi_ps_params {
@@ -179,10 +193,15 @@ struct wifi_ps_mode_params {
 	enum wifi_ps_mode mode;
 };
 
+struct wifi_ps_timeout_params {
+	int timeout_ms;
+};
+
 struct wifi_twt_params {
 	enum wifi_twt_operation operation;
 	enum wifi_twt_negotiation_type negotiation_type;
 	enum wifi_twt_setup_cmd setup_cmd;
+	enum wifi_twt_setup_resp_status resp_status;
 	/* Map requests to responses */
 	uint8_t dialog_token;
 	/* Map setup with teardown */
@@ -231,6 +250,19 @@ struct wifi_ps_config {
 	char num_twt_flows;
 };
 
+/* Generic get/set operation for any command*/
+enum wifi_mgmt_op {
+	WIFI_MGMT_GET = 0,
+	WIFI_MGMT_SET = 1,
+};
+
+struct wifi_reg_domain {
+	enum wifi_mgmt_op oper;
+	/* Ignore all other regulatory hints */
+	bool force;
+	uint8_t country_code[WIFI_COUNTRY_CODE_LEN];
+};
+
 #include <zephyr/net/net_if.h>
 
 typedef void (*scan_result_cb_t)(struct net_if *iface, int status,
@@ -268,6 +300,9 @@ struct net_wifi_mgmt_offload {
 	int (*set_power_save_mode)(const struct device *dev, struct wifi_ps_mode_params *params);
 	int (*set_twt)(const struct device *dev, struct wifi_twt_params *params);
 	int (*get_power_save_config)(const struct device *dev, struct wifi_ps_config *config);
+	int (*reg_domain)(const struct device *dev, struct wifi_reg_domain *reg_domain);
+	int (*set_power_save_timeout)(const struct device *dev,
+				      struct wifi_ps_timeout_params *ps_timeout);
 };
 
 /* Make sure that the network interface API is properly setup inside

@@ -3,26 +3,24 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef ZEPHYR_INCLUDE_POSIX_POSIX_SCHED_H_
-#define ZEPHYR_INCLUDE_POSIX_POSIX_SCHED_H_
+#ifndef ZEPHYR_INCLUDE_POSIX_SCHED_H_
+#define ZEPHYR_INCLUDE_POSIX_SCHED_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Cooperative scheduling policy */
-#ifndef SCHED_FIFO
-#define SCHED_FIFO 0
-#endif /* SCHED_FIFO */
+#define SCHED_FIFO 1
 
 /* Priority based preemptive scheduling policy */
-#ifndef SCHED_RR
-#define SCHED_RR 1
-#endif /* SCHED_RR */
+#define SCHED_RR 2
 
+#if defined(CONFIG_MINIMAL_LIBC) || defined(CONFIG_PICOLIBC)
 struct sched_param {
 	int sched_priority;
 };
+#endif
 
 /**
  * @brief Yield the processor
@@ -42,4 +40,4 @@ int sched_get_priority_max(int policy);
 }
 #endif
 
-#endif /* ZEPHYR_INCLUDE_POSIX_POSIX_SCHED_H_ */
+#endif /* ZEPHYR_INCLUDE_POSIX_SCHED_H_ */
