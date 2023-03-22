@@ -22,15 +22,10 @@ int mqtt_client_tls_connect(struct mqtt_client *client)
 {
 	const struct sockaddr *broker = client->broker;
 	struct mqtt_sec_config *tls_config = &client->transport.tls.config;
-	int type = SOCK_STREAM;
 	int ret;
 
-	if (tls_config->set_native_tls) {
-		type |= SOCK_NATIVE_TLS;
-	}
-
 	client->transport.tls.sock = zsock_socket(broker->sa_family,
-						  type, IPPROTO_TLS_1_2);
+						  SOCK_STREAM, IPPROTO_TLS_1_2);
 	if (client->transport.tls.sock < 0) {
 		return -errno;
 	}
@@ -77,17 +72,7 @@ int mqtt_client_tls_connect(struct mqtt_client *client)
 	if (tls_config->hostname) {
 		ret = zsock_setsockopt(client->transport.tls.sock, SOL_TLS,
 				       TLS_HOSTNAME, tls_config->hostname,
-				       strlen(tls_config->hostname));
-		if (ret < 0) {
-			goto error;
-		}
-	}
-
-	if (tls_config->session_cache == TLS_SESSION_CACHE_ENABLED) {
-		ret = zsock_setsockopt(client->transport.tls.sock, SOL_TLS,
-				       TLS_SESSION_CACHE,
-				       &tls_config->session_cache,
-				       sizeof(tls_config->session_cache));
+				       strlen(tls_config->hostname) + 1);
 		if (ret < 0) {
 			goto error;
 		}

@@ -12,9 +12,6 @@ LOG_MODULE_REGISTER(net_wifi_mgmt, CONFIG_NET_L2_WIFI_MGMT_LOG_LEVEL);
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/wifi_mgmt.h>
-#ifdef CONFIG_WPA_SUPP
-#include "supp_api.h"
-#endif
 
 static int wifi_connect(uint32_t mgmt_request, struct net_if *iface,
 			void *data, size_t len)
@@ -22,15 +19,12 @@ static int wifi_connect(uint32_t mgmt_request, struct net_if *iface,
 	struct wifi_connect_req_params *params =
 		(struct wifi_connect_req_params *)data;
 	const struct device *dev = net_if_get_device(iface);
-#ifndef CONFIG_WPA_SUPP
 	struct net_wifi_mgmt_offload *off_api =
 		(struct net_wifi_mgmt_offload *) dev->api;
-
 
 	if (off_api == NULL || off_api->connect == NULL) {
 		return -ENOTSUP;
 	}
-#endif /* CONFIG_WPA_SUPP */
 
 	LOG_HEXDUMP_DBG(params->ssid, params->ssid_length, "ssid");
 	LOG_HEXDUMP_DBG(params->psk, params->psk_length, "psk");
@@ -54,11 +48,8 @@ static int wifi_connect(uint32_t mgmt_request, struct net_if *iface,
 	    !params->ssid) {
 		return -EINVAL;
 	}
-#ifdef CONFIG_WPA_SUPP
-	return zephyr_supp_connect(dev, params);
-#else
+
 	return off_api->connect(dev, params);
-#endif /* CONFIG_WPA_SUPP */
 }
 
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_CONNECT, wifi_connect);
@@ -106,10 +97,6 @@ static int wifi_disconnect(uint32_t mgmt_request, struct net_if *iface,
 			   void *data, size_t len)
 {
 	const struct device *dev = net_if_get_device(iface);
-
-#ifdef CONFIG_WPA_SUPP
-	return zephyr_supp_disconnect(dev);
-#else
 	struct net_wifi_mgmt_offload *off_api =
 		(struct net_wifi_mgmt_offload *) dev->api;
 
@@ -118,7 +105,6 @@ static int wifi_disconnect(uint32_t mgmt_request, struct net_if *iface,
 	}
 
 	return off_api->disconnect(dev);
-#endif /* CONFIG_WPA_SUPP */
 }
 
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_DISCONNECT, wifi_disconnect);
@@ -183,24 +169,19 @@ static int wifi_iface_status(uint32_t mgmt_request, struct net_if *iface,
 			  void *data, size_t len)
 {
 	const struct device *dev = net_if_get_device(iface);
-	struct wifi_iface_status *status = data;
-
-	if (!data || len != sizeof(*status)) {
-		return -EINVAL;
-	}
-
-#ifdef CONFIG_WPA_SUPP
-	return zephyr_supp_status(dev, status);
-#else
 	struct net_wifi_mgmt_offload *off_api =
 		(struct net_wifi_mgmt_offload *) dev->api;
+	struct wifi_iface_status *status = data;
 
 	if (off_api == NULL || off_api->iface_status == NULL) {
 		return -ENOTSUP;
 	}
 
+	if (!data || len != sizeof(*status)) {
+		return -EINVAL;
+	}
+
 	return off_api->iface_status(dev, status);
-#endif /* CONFIG_WPA_SUPP */
 }
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_IFACE_STATUS, wifi_iface_status);
 
@@ -312,3 +293,45 @@ void wifi_mgmt_raise_twt_event(struct net_if *iface, struct wifi_twt_params *twt
 					iface, twt_params,
 					sizeof(struct wifi_twt_params));
 }
+
+static int wifi_reg_domain(uint32_t mgmt_request, struct net_if *iface,
+			   void *data, size_t len)
+{
+	const struct device *dev = net_if_get_device(iface);
+	struct net_wifi_mgmt_offload *off_api =
+			(struct net_wifi_mgmt_offload *) dev->api;
+	struct wifi_reg_domain *reg_domain = data;
+
+	if (off_api == NULL || off_api->reg_domain == NULL) {
+		return -ENOTSUP;
+	}
+
+	if (!data || len != sizeof(*reg_domain)) {
+		return -EINVAL;
+	}
+
+	return off_api->reg_domain(dev, reg_domain);
+}
+
+NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_REG_DOMAIN, wifi_reg_domain);
+
+static int wifi_set_power_save_timeout(uint32_t mgmt_request, struct net_if *iface,
+				       void *data, size_t len)
+{
+	const struct device *dev = net_if_get_device(iface);
+	struct net_wifi_mgmt_offload *off_api =
+		(struct net_wifi_mgmt_offload *) dev->api;
+	struct wifi_ps_timeout_params *ps_timeout = data;
+
+	if (off_api == NULL || off_api->set_power_save_timeout == NULL) {
+		return -ENOTSUP;
+	}
+
+	if (!data || len != sizeof(*ps_timeout)) {
+		return -EINVAL;
+	}
+
+	return off_api->set_power_save_timeout(dev, ps_timeout);
+}
+
+NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_PS_TIMEOUT, wifi_set_power_save_timeout);
