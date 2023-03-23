@@ -186,8 +186,10 @@ int pthread_mutex_init(pthread_mutex_t *mu, const pthread_mutexattr_t *_attr)
 	m = to_posix_mutex(mu);
 	if (m == NULL) {
 		k_spin_unlock(&z_pthread_spinlock, key);
+		printk("ENOMEM here\n");
 		return ENOMEM;
 	}
+	printk("OK\n");
 
 	m->type = (attr == NULL) ? def_attr.type : attr->type;
 

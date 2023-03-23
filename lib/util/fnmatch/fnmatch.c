@@ -74,7 +74,7 @@ static const char * rangematch(const char *pattern, int test, int flags)
      */
     if ((negate = (*pattern == '!' || *pattern == '^')) != 0)
         ++pattern;
-    
+
     need = 1;
     for (ok = 0; (c = FOLDCASE(*pattern++, flags)) != ']' || need;) {
         need = 0;
@@ -84,7 +84,7 @@ static const char * rangematch(const char *pattern, int test, int flags)
             c = FOLDCASE(*pattern++, flags);
         if (c == EOS)
             return NULL;
-        if (*pattern == '-' 
+        if (*pattern == '-'
             && (c2 = FOLDCASE(*(pattern + 1), flags)) != EOS &&
                 c2 != ']') {
             pattern += 2;
@@ -203,7 +203,7 @@ static int fnmatchx(const char *pattern, const char *string, int flags, size_t r
     /* NOTREACHED */
 }
 
-int fnmatch(const char *pattern, const char *string, int flags)
-{
-    return fnmatchx(pattern, string, flags, 64);
-}
+// int fnmatch(const char *pattern, const char *string, int flags)
+// {
+//     return fnmatchx(pattern, string, flags, 64);
+// }
