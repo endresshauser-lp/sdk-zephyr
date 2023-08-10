@@ -2431,7 +2431,8 @@ next_state:
 			tcp_send_timer_cancel(conn);
 			next = TCP_FIN_WAIT_2;
 		} else if (th && (len > 0)) {
-				tcp_out(conn, FIN | ACK);
+			tcp_send_timer_cancel(conn);
+			tcp_out(conn, FIN | ACK);
 		}
 		break;
 	case TCP_FIN_WAIT_2:
