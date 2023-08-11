@@ -2430,19 +2430,41 @@ next_state:
 		} else if (th && FL(&fl, ==, ACK, th_seq(th) == conn->ack)) {
 			tcp_send_timer_cancel(conn);
 			next = TCP_FIN_WAIT_2;
+		} else if (th && (len > 0)) {
+			tcp_send_timer_cancel(conn);
+			tcp_out_ext(conn, (FIN | ACK), NULL, conn->seq - 1);
 		}
 		break;
 	case TCP_FIN_WAIT_2:
-		if (th && (FL(&fl, ==, FIN, th_seq(th) == conn->ack) ||
-			   FL(&fl, ==, FIN | ACK, th_seq(th) == conn->ack) ||
-			   FL(&fl, ==, FIN | PSH | ACK,
-			      th_seq(th) == conn->ack))) {
-			/* Received FIN on FIN_WAIT_2, so cancel the timer */
-			k_work_cancel_delayable(&conn->fin_timer);
+		/* Acknowledge but drop any data, but subtract any duplicate data */
+		if (th) {
+			if (len > 0) {
+				int32_t new_len = len - net_tcp_seq_cmp(conn->ack, th_seq(th));
+				/* Cases:
+				 * - Data already received earlier: len > 0 , new_len <= 0
+				 * - Partially new data len > 0, new_len > 0
+				 * - Out of order data len > 0, new_len > 0, ignore the data in
+				 *   between
+				 */
+				if (new_len > 0) {
+					conn_ack(conn, + new_len);
+				}
+			}
 
-			conn_ack(conn, + 1);
-			tcp_out(conn, ACK);
-			next = TCP_TIME_WAIT;
+			if (FL(&fl, ==, FIN, th_seq(th) == conn->ack) ||
+				   FL(&fl, ==, FIN | ACK, th_seq(th) == conn->ack) ||
+				   FL(&fl, ==, FIN | PSH | ACK,
+				      th_seq(th) == conn->ack)) {
+				/* Received FIN on FIN_WAIT_2, so cancel the timer */
+				k_work_cancel_delayable(&conn->fin_timer);
+
+				conn_ack(conn, + 1);
+				tcp_out(conn, ACK);
+				next = TCP_TIME_WAIT;
+			} else if (len > 0) {
+				/* Send out a duplicate ACK */
+				tcp_out(conn,  ACK);
+			}
 		}
 		break;
 	case TCP_CLOSING:
