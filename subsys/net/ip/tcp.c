@@ -2432,7 +2432,7 @@ next_state:
 			next = TCP_FIN_WAIT_2;
 		} else if (th && (len > 0)) {
 			tcp_send_timer_cancel(conn);
-			tcp_out(conn, FIN | ACK);
+			tcp_out_ext(conn, (FIN | ACK), NULL, conn->seq - 1);
 		}
 		break;
 	case TCP_FIN_WAIT_2:
