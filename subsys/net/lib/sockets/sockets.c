@@ -10,7 +10,7 @@
 
 /* Zephyr headers */
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(net_sock, CONFIG_NET_SOCKETS_LOG_LEVEL);
+LOG_MODULE_REGISTER(net_sock, 3);
 
 #include <zephyr/kernel.h>
 #include <zephyr/net/net_context.h>
@@ -1284,7 +1284,7 @@ static inline ssize_t zsock_recv_stream(struct net_context *ctx,
 			/* Either timeout expired, or wait was cancelled
 			 * due to connection closure by peer.
 			 */
-			NET_DBG("NULL return from fifo");
+			NET_ERR("NULL return from fifo");
 
 			if (waitall && (recv_len > 0)) {
 				return recv_len;
