@@ -16,6 +16,7 @@ zephyr_syscall_header(${ZEPHYR_BASE}/include/zephyr/drivers/flash.h)
 
 zephyr_library()
 
+zephyr_library_sources_ifdef(CONFIG_DISK_FLASH_DRIVER disk_flash.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_CC13XX_CC26XX soc_flash_cc13xx_cc26xx.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_TELINK_B91 soc_flash_b91.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_NOR spi_nor.c)
