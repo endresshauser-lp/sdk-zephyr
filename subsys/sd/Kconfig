@@ -65,6 +65,12 @@ config SD_DATA_TIMEOUT
 	help
 	  Default timeout in milliseconds for SD data transfer commands
 
+config SD_LOCK_TIMEOUT
+	int "Timeout for SD card lock acquisition (in ms)"
+	default 0
+	help
+	   Default timeout in milliseconds for SD card lock acquisition
+
 config SD_BUFFER_SIZE
 	int
 	# If SDHC required buffer alignment, we need a full block size in
