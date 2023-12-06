@@ -139,7 +139,9 @@ static int disk_flash_write(const struct device *dev, off_t offset, const void *
 			len_write = data->sector_buf_size - write_padding;
 		}
 
-		memcpy(&data->sector_buf[write_padding], &src_buf[read_cursor], len_write);
+		for(size_t i = 0; i < len_write; i++) {
+			&data->sector_buf[write_padding + i] &= &src_buf[read_cursor + i]
+		}
 
 		if (disk_access_write(cfg->disk_name, data->sector_buf, write_sector, 1)) {
 			ret = -EINVAL;
