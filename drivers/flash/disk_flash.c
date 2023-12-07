@@ -139,8 +139,8 @@ static int disk_flash_write(const struct device *dev, off_t offset, const void *
 			len_write = data->sector_buf_size - write_padding;
 		}
 
-		for(size_t i = 0; i < len_write; i++) {
-			&data->sector_buf[write_padding + i] &= &src_buf[read_cursor + i]
+		for (size_t i = 0; i < len_write; i++) {
+			data->sector_buf[write_padding + i] &= src_buf[read_cursor + i];
 		}
 
 		if (disk_access_write(cfg->disk_name, data->sector_buf, write_sector, 1)) {
@@ -267,7 +267,6 @@ static int disk_flash_init(const struct device *dev)
 		goto init_done;
 	}
 
-
 	res = disk_access_ioctl(cfg->disk_name, DISK_IOCTL_GET_SECTOR_SIZE,
 				&data->disk_sector_size);
 	if (res != 0) {
@@ -313,7 +312,10 @@ init_done:
 		.flash_size = DT_INST_PROP(index, size) / 8,					\
 		.flash_parameters =								\
 		{										\
-			.write_block_size = 1,							\
+			.write_block_size = 							\
+				COND_CODE_0(DT_INST_PROP(index, write_block_size),    		\
+					(DT_INST_PROP(index, disk_sector_size)),  		\
+					(DT_INST_PROP(index, write_block_size))),		\
 			.erase_value = 0xFF							\
 		},										\
 		IF_ENABLED(									\
