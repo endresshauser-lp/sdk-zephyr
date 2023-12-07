@@ -15,6 +15,12 @@ properties:
     type: int
     description: emulated flash page size
     required: true
+  write-block-size:
+    type: int
+    description: >
+      emulated write block size of the flash. If this value is set to 0 the
+      disk-sector-size will be used as write block size.
+    default: 0
   disk-name:
     type: string
     description: the name of the underlying disk to be used
