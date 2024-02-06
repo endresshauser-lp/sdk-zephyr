@@ -121,6 +121,27 @@ module-str = Log level for DNS resolver
 module-help = Enables DNS resolver code to output debug messages.
 source "subsys/net/Kconfig.template.log_config.net"
 
+menuconfig DNS_RESOLVER_CACHE
+	bool "DNS resolver cache"
+	default n
+	help
+	   This option enables the dns resolver cache. DNS queries
+	   will be cached based on TTL and delivered from cache
+	   whenever possible. This reduces network usage.
+
+if DNS_RESOLVER_CACHE
+
+config DNS_RESOLVER_CACHE_MAX_ENTRIES
+	int "Number of cache entries supported by the dns cache"
+	default 6
+	help
+	  This defines how many entries the DNS cache can hold. If
+	  not enough entries for caching are available the oldest
+	  entry gets replaced. Adjusting this value will affect
+	  RAM usage.
+
+endif # DNS_RESOLVER_CACHE
+
 endif # DNS_RESOLVER
 
 config MDNS_RESPONDER
