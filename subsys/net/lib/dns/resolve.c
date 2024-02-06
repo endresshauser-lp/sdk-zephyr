@@ -39,13 +39,6 @@ LOG_MODULE_REGISTER(net_dns_resolve, CONFIG_DNS_RESOLVER_LOG_LEVEL);
 
 #define DNS_BUF_TIMEOUT K_MSEC(500) /* ms */
 
-/* RFC 1035, 3.1. Name space definitions
- * To simplify implementations, the total length of a domain name (i.e.,
- * label octets and label length octets) is restricted to 255 octets or
- * less.
- */
-#define DNS_MAX_NAME_LEN	255
-
 #define DNS_QUERY_MAX_SIZE	(DNS_MSG_HEADER_SIZE + DNS_MAX_NAME_LEN + \
 				 DNS_QTYPE_LEN + DNS_QCLASS_LEN)
 

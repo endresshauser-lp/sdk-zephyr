@@ -14,7 +14,7 @@ static void dns_cache_clean(struct dns_cache const *cache);
 int dns_cache_flush(struct dns_cache *cache)
 {
 	for (size_t i = 0; i < cache->size; i++) {
-		cache->entries[i].uptime = 0;
+		cache->entries[i].creation_uptime = 0;
 	}
 
 	return 0;
@@ -31,35 +31,35 @@ int dns_cache_add(struct dns_cache *cache, char const *query, struct dns_addrinf
 	if (cache == NULL || query == NULL || addrinfo == NULL || ttl == 0) {
 		return -EINVAL;
 	}
-	if (strlen(query) >= DNS_CACHE_QUERY_MAX_SIZE) {
-        LOG_WRN("Query string to big to be processed %u >=" DNS_CACHE_QUERY_MAX_SIZE, strlen(query));
+	if (strlen(query) >= DNS_MAX_NAME_LEN) {
+		LOG_WRN("Query string to big to be processed %u >= DNS_MAX_NAME_LEN",
+			strlen(query));
 		return -EINVAL;
 	}
 
 	dns_cache_clean(cache);
 
 	for (size_t i = 0; i < cache->size; i++) {
-		if (cache->entries[i].uptime > 0 &&
+		if (cache->entries[i].creation_uptime > 0 &&
 		    memcmp(cache->entries[i].query, query, strlen(query)) == 0) {
 			index_to_replace = i;
 			break;
 		}
 		if (!found_empty_slot) {
-			if (cache->entries[i].uptime <= 0) {
+			if (cache->entries[i].creation_uptime <= 0) {
 				index_to_replace = i;
 				found_empty_slot = true;
-			} else if (cache->entries[i].uptime < oldest_entry_uptime) {
+			} else if (cache->entries[i].creation_uptime < oldest_entry_uptime) {
 				index_to_replace = i;
-				oldest_entry_uptime = cache->entries[i].uptime;
+				oldest_entry_uptime = cache->entries[i].creation_uptime;
 			}
 		}
 	}
 
-	memset(cache->entries[index_to_replace].query, 0, DNS_CACHE_QUERY_MAX_SIZE);
-	memcpy(cache->entries[index_to_replace].query, query, strlen(query));
-	memcpy(&cache->entries[index_to_replace].data, addrinfo, sizeof(*addrinfo));
+	strncpy(cache->entries[index_to_replace].query, query, DNS_MAX_NAME_LEN - 1);
+	cache->entries[index_to_replace].data = *addrinfo;
 	cache->entries[index_to_replace].ttl = ttl;
-	cache->entries[index_to_replace].uptime = k_uptime_get();
+	cache->entries[index_to_replace].creation_uptime = k_uptime_get();
 
 	return 0;
 }
@@ -70,24 +70,22 @@ int dns_cache_find(struct dns_cache const *cache, const char *query, struct dns_
 	if (cache == NULL || query == NULL || addrinfo == NULL) {
 		return -EINVAL;
 	}
-	if (strlen(query) >= DNS_CACHE_QUERY_MAX_SIZE) {
-        LOG_WRN("Query string to big to be processed %u >=" DNS_CACHE_QUERY_MAX_SIZE, strlen(query));
+	if (strlen(query) >= DNS_MAX_NAME_LEN) {
+		LOG_WRN("Query string to big to be processed %u >= DNS_MAX_NAME_LEN",
+			strlen(query));
 		return -EINVAL;
 	}
 
 	dns_cache_clean(cache);
 
 	for (size_t i = 0; i < cache->size; i++) {
-		if (cache->entries[i].uptime == 0) {
+		if (cache->entries[i].creation_uptime == 0) {
 			continue;
 		}
-		if (strlen(cache->entries[i].query) != strlen(query)) {
+		if (strcmp(cache->entries[i].query, query) != 0) {
 			continue;
 		}
-		if (memcmp(cache->entries[i].query, query, strlen(query)) != 0) {
-			continue;
-		}
-		memcpy(addrinfo, &cache->entries[i].data, sizeof(*addrinfo));
+		*addrinfo = cache->entries[i].data;
 		LOG_DBG("FOUND \"%s\"", query);
 		return 0;
 	}
@@ -99,15 +97,15 @@ int dns_cache_find(struct dns_cache const *cache, const char *query, struct dns_
 static void dns_cache_clean(struct dns_cache const *cache)
 {
 	for (size_t i = 0; i < cache->size; i++) {
-		if (cache->entries[i].uptime == 0) {
+		if (cache->entries[i].creation_uptime == 0) {
 			continue;
 		}
-		int64_t reftime = cache->entries[i].uptime;
+		int64_t reftime = cache->entries[i].creation_uptime;
 		int64_t delta_seconds = k_uptime_delta(&reftime) / 1000;
 
 		if (delta_seconds >= cache->entries[i].ttl) {
 			LOG_DBG("REMOVE \"%s\"", cache->entries[i].query);
-			cache->entries[i].uptime = 0;
+			cache->entries[i].creation_uptime = 0;
 		}
 	}
 }

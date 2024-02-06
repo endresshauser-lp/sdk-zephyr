@@ -16,18 +16,16 @@
 #include <stdint.h>
 #include <zephyr/net/dns_resolve.h>
 
-#define DNS_CACHE_QUERY_MAX_SIZE 255
-
 struct dns_cache_entry {
-	char query[DNS_CACHE_QUERY_MAX_SIZE];
+	char query[DNS_MAX_NAME_LEN];
 	struct dns_addrinfo data;
 	uint32_t ttl;
-	int64_t uptime;
+	int64_t creation_uptime;
 };
 
 struct dns_cache {
 	struct dns_cache_entry *entries;
-	uint8_t size;
+	size_t size;
 };
 
 /**
@@ -40,7 +38,7 @@ struct dns_cache {
  * @param name Name of the cache.
  */
 #define DNS_CACHE_DEFINE(name, cache_size)                                                         \
-	static struct dns_cache_entry name##_entries[cache_size];                                  \
+	static struct dns_cache_entry name##_entries[cache_size] = {0};                            \
 	static struct dns_cache name = {                                                           \
 		.entries = name##_entries,                                                         \
 		.size = cache_size,                                                                \
