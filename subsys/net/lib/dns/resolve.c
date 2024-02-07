@@ -1185,13 +1185,15 @@ int dns_resolve_name(struct dns_resolve_context *ctx,
 
 try_resolve:
 #ifdef CONFIG_DNS_RESOLVER_CACHE
-	struct dns_addrinfo cached_info = {0};
-	ret = dns_cache_find(&dns_cache, query, &cached_info);
-	if (ret == 0) {
+	struct dns_addrinfo cached_info[CONFIG_DNS_RESOLVER_AI_MAX_ENTRIES] = {0};
+	ret = dns_cache_find(&dns_cache, query, cached_info, sizeof(cached_info));
+	if (ret > 0) {
 		/* The query was cached, no
 		 * need to continue further.
 		 */
-		cb(DNS_EAI_INPROGRESS, &cached_info, user_data);
+		for (size_t i = 0; i < ret; i++) {
+			cb(DNS_EAI_INPROGRESS, &cached_info[i], user_data);
+		}
 		cb(DNS_EAI_ALLDONE, NULL, user_data);
 
 		return 0;
