@@ -13,6 +13,8 @@
 #include <zephyr/drivers/disk.h>
 
 
+static K_MUTEX_DEFINE(lock);
+
 enum sd_status {
 	SD_UNINIT,
 	SD_ERROR,
@@ -77,7 +79,10 @@ static int disk_sdmmc_access_read(struct disk_info *disk, uint8_t *buf,
 	const struct device *dev = disk->dev;
 	struct sdmmc_data *data = dev->data;
 
-	return sdmmc_read_blocks(&data->card, buf, sector, count);
+	k_mutex_lock(&lock, K_FOREVER);
+	int ret = sdmmc_read_blocks(&data->card, buf, sector, count);
+	k_mutex_unlock(&lock);
+	return ret;
 }
 
 static int disk_sdmmc_access_write(struct disk_info *disk, const uint8_t *buf,
@@ -86,7 +91,10 @@ static int disk_sdmmc_access_write(struct disk_info *disk, const uint8_t *buf,
 	const struct device *dev = disk->dev;
 	struct sdmmc_data *data = dev->data;
 
-	return sdmmc_write_blocks(&data->card, buf, sector, count);
+	k_mutex_lock(&lock, K_FOREVER);
+	int ret = sdmmc_write_blocks(&data->card, buf, sector, count);
+	k_mutex_unlock(&lock);
+	return ret;
 }
 
 static int disk_sdmmc_access_ioctl(struct disk_info *disk, uint8_t cmd, void *buf)
@@ -94,7 +102,10 @@ static int disk_sdmmc_access_ioctl(struct disk_info *disk, uint8_t cmd, void *bu
 	const struct device *dev = disk->dev;
 	struct sdmmc_data *data = dev->data;
 
-	return sdmmc_ioctl(&data->card, cmd, buf);
+	k_mutex_lock(&lock, K_FOREVER);
+	int ret = sdmmc_ioctl(&data->card, cmd, buf);
+	k_mutex_unlock(&lock);
+	return ret;
 }
 
 static const struct disk_operations sdmmc_disk_ops = {
