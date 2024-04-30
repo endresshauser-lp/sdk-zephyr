@@ -443,7 +443,7 @@ static int transceive(const struct device *dev,
 
 		transfer_next_chunk(dev);
 
-		error = spi_context_wait_for_completion(&dev_data->ctx);
+		error = spi_context_wait_for_completion(&dev_data->ctx, (void*)tx_bufs, (void*) rx_bufs);
 		if (error == -ETIMEDOUT) {
 			/* Set the chunk length to 0 so that event_handler()
 			 * knows that the transaction timed out and is to be
