@@ -165,7 +165,7 @@ static inline int spi_context_wait_for_completion(struct spi_context *ctx, void 
 		}
 
 		if (k_sem_take(&ctx->sync, timeout)) {
-			LOG_ERR("Timeout waiting for transfer complete %p %p", tx_bufs, rx_bufs);
+			LOG_ERR("Timeout waiting for transfer complete %p %p %s", tx_bufs, rx_bufs, k_thread_name_get(k_current_get()));
 			return -ETIMEDOUT;
 		}
 		status = ctx->sync_status;
@@ -329,7 +329,7 @@ void spi_context_update_tx(struct spi_context *ctx, uint8_t dfs, uint32_t len)
 	}
 
 	if (len > ctx->tx_len) {
-		LOG_ERR("TX: Update exceeds current buffer %u %u", len, ctx->tx_len);
+		LOG_ERR("TX: Update exceeds current buffer %u %u %s", len, ctx->tx_len, k_thread_name_get(k_current_get()));
 		return;
 	}
 
@@ -376,7 +376,7 @@ void spi_context_update_rx(struct spi_context *ctx, uint8_t dfs, uint32_t len)
 	}
 
 	if (len > ctx->rx_len) {
-		LOG_ERR("RX: Update exceeds current buffer %u %u", len, ctx->rx_len);
+		LOG_ERR("RX: Update exceeds current buffer %u %u %s", len, ctx->rx_len, k_thread_name_get(k_current_get()));
 		return;
 	}
 

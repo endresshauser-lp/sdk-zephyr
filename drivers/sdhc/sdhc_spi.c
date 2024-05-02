@@ -611,30 +611,44 @@ static int sdhc_spi_request(const struct device *dev,
 	if (data == NULL) {
 		do {
 			ret = sdhc_spi_send_cmd(dev, cmd, false);
+			if(ret) {
+				LOG_WRN("sdhc_spi_send_cmd failed data NULL");
+			}
 		} while ((ret != 0) && (retries-- > 0));
 	} else {
 		do {
 			ret = sdhc_spi_send_cmd(dev, cmd, true);
 			if (ret) {
+				LOG_WRN("sdhc_spi_send_cmd failed data non-NULL");
 				continue;
 			}
 			if ((cmd->opcode == SD_WRITE_SINGLE_BLOCK) ||
 				(cmd->opcode == SD_WRITE_MULTIPLE_BLOCK)) {
 				ret = sdhc_spi_write_data(dev, data);
+				if (ret) {
+					LOG_WRN("sdhc_spi_write_data failed data non-NULL");
+				}
 			} else {
 				ret = sdhc_spi_read_data(dev, data);
+				if (ret) {
+					LOG_WRN("sdhc_spi_read_data failed data non-NULL");
+				}
 			}
 			if (ret || (cmd->opcode == SD_READ_MULTIPLE_BLOCK)) {
 				/* CMD12 is required after multiple read, or
 				 * to retry failed transfer
 				 */
-				sdhc_spi_send_cmd(dev,
+				int ret2 = sdhc_spi_send_cmd(dev,
 					(struct sdhc_command *)&stop_cmd,
 					false);
+				if (ret2) {
+					LOG_WRN("sdhc_spi_send_cmd stop failed. return without release.");
+				}
 			}
 		} while ((ret != 0) && (retries-- > 0));
 	}
 	if (ret) {
+		LOG_WRN("returing without releasing?");
 		return ret;
 	}
 	/* Release SPI bus */
