@@ -29,11 +29,9 @@ properties:
     type: int
     description: the sector size in byte of the underlying disk to be used
     required: true
-  disk-offset:
+  disk-sector-offset:
     type: int
-    description: >
-      offset on the disk in bytes. If the offset is 10 the 10th byte will
-      be the first one used.
+    description: offset on the disk in sectors.
     default: 0
   init-level:
     type: string
