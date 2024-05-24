@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(disk_flash, CONFIG_FLASH_LOG_LEVEL);
 struct disk_flash_data {
 	struct k_sem sem;
 	uint8_t *const sector_buf;
-	uint16_t const sector_buf_size;
+	uint32_t const sector_buf_size;
 	uint32_t disk_total_sector_cnt;
 	uint32_t disk_sector_size;
 };
@@ -27,7 +27,7 @@ struct disk_flash_config {
 	uint32_t flash_size;
 	struct flash_parameters flash_parameters;
 	char *disk_name;
-	uint32_t disk_offset;
+	uint64_t disk_offset;
 
 	IF_ENABLED(CONFIG_FLASH_PAGE_LAYOUT, (struct flash_pages_layout fpl;))
 };
@@ -81,10 +81,10 @@ static int disk_flash_read(const struct device *dev, off_t offset, void *dst, si
 	}
 
 	while (write_cursor < len) {
-		uint32_t read_cursor = cfg->disk_offset + offset + write_cursor;
-		uint32_t read_sector = read_cursor / data->disk_sector_size;
-		uint32_t read_padding = read_cursor % data->disk_sector_size;
-		uint32_t len_write = (len - write_cursor);
+		uint64_t read_cursor = cfg->disk_offset + offset + write_cursor;
+		uint64_t read_sector = read_cursor / data->disk_sector_size;
+		uint64_t read_padding = read_cursor % data->disk_sector_size;
+		uint64_t len_write = (len - write_cursor);
 
 		if (disk_access_read(cfg->disk_name, data->sector_buf, read_sector, 1)) {
 			ret = -EINVAL;
@@ -125,10 +125,10 @@ static int disk_flash_write(const struct device *dev, off_t offset, const void *
 	}
 
 	while (read_cursor < len) {
-		uint32_t write_cursor = cfg->disk_offset + offset + read_cursor;
-		uint32_t write_sector = write_cursor / data->disk_sector_size;
-		uint32_t write_padding = write_cursor % data->disk_sector_size;
-		uint32_t len_write = (len - read_cursor);
+		uint64_t write_cursor = cfg->disk_offset + offset + read_cursor;
+		uint64_t write_sector = write_cursor / data->disk_sector_size;
+		uint64_t write_padding = write_cursor % data->disk_sector_size;
+		uint64_t len_write = (len - read_cursor);
 
 		if (disk_access_read(cfg->disk_name, data->sector_buf, write_sector, 1)) {
 			ret = -EINVAL;
@@ -175,10 +175,10 @@ static int disk_flash_erase(const struct device *dev, off_t offset, size_t size)
 	}
 
 	while (read_cursor < size) {
-		uint32_t write_cursor = cfg->disk_offset + offset + read_cursor;
-		uint32_t write_sector = write_cursor / data->disk_sector_size;
-		uint32_t write_padding = write_cursor % data->disk_sector_size;
-		uint32_t len_write = (size - read_cursor);
+		uint64_t write_cursor = cfg->disk_offset + offset + read_cursor;
+		uint64_t write_sector = write_cursor / data->disk_sector_size;
+		uint64_t write_padding = write_cursor % data->disk_sector_size;
+		uint64_t len_write = (size - read_cursor);
 
 		if (write_sector < 0 || write_sector >= data->disk_total_sector_cnt) {
 			ret = -EINVAL;
@@ -194,9 +194,8 @@ static int disk_flash_erase(const struct device *dev, off_t offset, size_t size)
 			len_write = data->sector_buf_size - write_padding;
 		}
 
-		memset(&data->sector_buf[write_padding],
-			cfg->flash_parameters.erase_value,
-			len_write);
+		memset(&data->sector_buf[write_padding], cfg->flash_parameters.erase_value,
+		       len_write);
 
 		if (disk_access_write(cfg->disk_name, data->sector_buf, write_sector, 1)) {
 			ret = -EINVAL;
@@ -286,11 +285,15 @@ static int disk_flash_init(const struct device *dev)
 			data->disk_sector_size);
 	}
 
+	if (UINT64_MAX / data->disk_total_sector_cnt < data->disk_sector_size) {
+		LOG_ERR("Disk size in bytes needs to be representable by uint64_t");
+		res = -EINVAL;
+		goto init_done;
+	}
 	disk_size = data->disk_sector_size * data->disk_total_sector_cnt;
 	if ((disk_size - cfg->disk_offset) < cfg->flash_size) {
 		LOG_ERR("Underlying disk to small to support flash: %lu < %d",
-			(unsigned long)(disk_size - cfg->disk_offset),
-			cfg->flash_size);
+			(unsigned long)(disk_size - cfg->disk_offset), cfg->flash_size);
 		res = -EINVAL;
 		goto init_done;
 	}
@@ -299,42 +302,37 @@ init_done:
 	return res;
 }
 
-#define DISK_FLASH_DEFINE(index)								\
-	BUILD_ASSERT(DT_INST_PROP(index, size) > 0, "flash_size needs to be > 0");		\
-	BUILD_ASSERT(DT_INST_PROP(index, page_size) > 0, "page_size needs to be > 0");		\
-	BUILD_ASSERT(DT_INST_PROP(index, disk_offset) >= 0, "disk_offset needs to be >= 0");	\
-	uint8_t sector_buf_##index[DT_INST_PROP(index, disk_sector_size)];			\
-	static struct disk_flash_data disk_flash_data_##index = {				\
-		.sector_buf = sector_buf_##index,						\
-		.sector_buf_size = sizeof(sector_buf_##index),					\
-	};											\
-	static const struct disk_flash_config disk_flash_config_##index = {			\
-		.flash_size = DT_INST_PROP(index, size) / 8,					\
-		.flash_parameters =								\
-		{										\
-			.write_block_size = 							\
-				COND_CODE_0(DT_INST_PROP(index, write_block_size),    		\
-					(DT_INST_PROP(index, disk_sector_size)),  		\
-					(DT_INST_PROP(index, write_block_size))),		\
-			.erase_value = 0xFF							\
-		},										\
-		IF_ENABLED(									\
-			CONFIG_FLASH_PAGE_LAYOUT,						\
-			(.fpl =									\
-				{								\
-					.pages_count =						\
-						(DT_INST_PROP(index, size) / 8)			\
-						/ DT_INST_PROP(index, page_size),		\
-					.pages_size = DT_INST_PROP(index, page_size)		\
-				},								\
-			)									\
-		)										\
-		.disk_name = DT_INST_PROP(index, disk_name),					\
-		.disk_offset = DT_INST_PROP(index, disk_offset),				\
-	};											\
-	DEVICE_DT_INST_DEFINE(index, &disk_flash_init, NULL, &disk_flash_data_##index,		\
-			&disk_flash_config_##index,						\
-			DT_STRING_TOKEN(DT_DRV_INST(index), init_level),			\
-			CONFIG_FLASH_INIT_PRIORITY, &disk_flash_api);
+#define DISK_FLASH_DEFINE(index)                                                                   \
+	BUILD_ASSERT(DT_INST_PROP(index, size) > 0, "flash_size needs to be > 0");                 \
+	BUILD_ASSERT(DT_INST_PROP(index, page_size) > 0, "page_size needs to be > 0");             \
+	BUILD_ASSERT(DT_INST_PROP(index, disk_sector_offset) >= 0,                                 \
+		     "disk_sector_offset needs to be >= 0");                                       \
+	BUILD_ASSERT(UINT64_MAX / DT_INST_PROP(index, disk_sector_offset) >                        \
+			     DT_INST_PROP(index, disk_sector_size),                                \
+		     "disk_offset needs to be representable by uint64_t");                         \
+	uint8_t sector_buf_##index[DT_INST_PROP(index, disk_sector_size)];                         \
+	static struct disk_flash_data disk_flash_data_##index = {                                  \
+		.sector_buf = sector_buf_##index,                                                  \
+		.sector_buf_size = sizeof(sector_buf_##index),                                     \
+	};                                                                                         \
+	static const struct disk_flash_config disk_flash_config_##index = {                        \
+		.flash_size = DT_INST_PROP(index, size) / 8,                                       \
+		.flash_parameters = {.write_block_size =                                           \
+					     COND_CODE_0(DT_INST_PROP(index, write_block_size),    \
+							 (DT_INST_PROP(index, disk_sector_size)),  \
+							 (DT_INST_PROP(index, write_block_size))), \
+				     .erase_value = 0xFF},                                         \
+		IF_ENABLED(CONFIG_FLASH_PAGE_LAYOUT,                                               \
+			   (.fpl = {.pages_count = (DT_INST_PROP(index, size) / 8) /               \
+						   DT_INST_PROP(index, page_size),                 \
+				    .pages_size = DT_INST_PROP(index, page_size)}, ))              \
+			.disk_name = DT_INST_PROP(index, disk_name),                               \
+		.disk_offset = (uint64_t)DT_INST_PROP(index, disk_sector_offset) *                 \
+			       (uint64_t)DT_INST_PROP(index, disk_sector_size),                    \
+	};                                                                                         \
+	DEVICE_DT_INST_DEFINE(index, &disk_flash_init, NULL, &disk_flash_data_##index,             \
+			      &disk_flash_config_##index,                                          \
+			      DT_STRING_TOKEN(DT_DRV_INST(index), init_level),                     \
+			      CONFIG_FLASH_INIT_PRIORITY, &disk_flash_api);
 
 DT_INST_FOREACH_STATUS_OKAY(DISK_FLASH_DEFINE)
