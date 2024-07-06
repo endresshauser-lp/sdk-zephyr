@@ -1195,6 +1195,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 		}
 #endif
 		case DHCPV4_OPTIONS_LEASE_TIME:
+		 {
 			if (length != 4U) {
 				NET_ERR("options_lease_time, bad length");
 				return false;
@@ -1211,7 +1212,9 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				iface->config.dhcpv4.lease_time);
 
 			break;
+		 }
 		case DHCPV4_OPTIONS_RENEWAL:
+		{
 			if (length != 4U) {
 				NET_DBG("options_renewal, bad length");
 				return false;
@@ -1230,7 +1233,9 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 			renewal_present = true;
 
 			break;
+		}
 		case DHCPV4_OPTIONS_REBINDING:
+		{
 			if (length != 4U) {
 				NET_DBG("options_rebinding, bad length");
 				return false;
@@ -1250,7 +1255,8 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 			rebinding_present = true;
 
 			break;
-		case DHCPV4_OPTIONS_SERVER_ID:
+		}
+		case DHCPV4_OPTIONS_SERVER_ID: {
 			if (length != 4U) {
 				NET_DBG("options_server_id, bad length");
 				return false;
@@ -1267,6 +1273,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 			NET_DBG("options_server_id: %s",
 				net_sprint_ipv4_addr(&iface->config.dhcpv4.server_id));
 			break;
+		}
 		case DHCPV4_OPTIONS_MSG_TYPE: {
 			if (length != 1U) {
 				NET_DBG("options_msg_type, bad length");
@@ -1285,7 +1292,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 
 			break;
 		}
-		default:
+		default: {
 			if (unhandled) {
 				NET_DBG("option unknown: %d", type);
 			} else {
@@ -1297,6 +1304,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				return false;
 			}
 			break;
+		}
 		}
 	}
 
