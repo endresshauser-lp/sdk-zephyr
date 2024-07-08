@@ -773,33 +773,57 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 #if defined(CONFIG_DNS_RESOLVER)
 		case DHCPV4_OPTIONS_DNS_SERVER: {
 			struct dns_resolve_context *ctx;
-			struct sockaddr_in dns;
-			const struct sockaddr *dns_servers[] = {
-				(struct sockaddr *)&dns, NULL
-			};
+			struct sockaddr_in dnses[CONFIG_DNS_RESOLVER_MAX_SERVERS] = { 0 };
+			const struct sockaddr *dns_servers[CONFIG_DNS_RESOLVER_MAX_SERVERS];
+			const uint8_t addr_size = 4U;
 			int status;
+
+			for (uint8_t i = 0; i < CONFIG_DNS_RESOLVER_MAX_SERVERS; i++) {
+				dns_servers[i] = (struct sockaddr *)&dnses[i];
+			}
 
 			/* DNS server option may present 1 or more
 			 * addresses. Each 4 bytes in length. DNS
 			 * servers should be listed in order
-			 * of preference.  Hence we choose the first
-			 * and skip the rest.
+			 * of preference. Hence how many we parse
+			 * depends on CONFIG_DNS_RESOLVER_MAX_SERVERS
 			 */
-			if (length % 4 != 0U) {
+			if (length % addr_size != 0U) {
 				NET_ERR("options_dns, bad length");
 				return false;
 			}
 
-			(void)memset(&dns, 0, sizeof(dns));
+			const uint8_t provided_servers_cnt = length / addr_size;
+			uint8_t dns_servers_cnt = 0;
 
-			if (net_pkt_read(pkt, dns.sin_addr.s4_addr, 4) ||
-			    net_pkt_skip(pkt, length - 4U)) {
+			if (provided_servers_cnt > CONFIG_DNS_RESOLVER_MAX_SERVERS) {
+				NET_WARN("DHCP server provided more DNS servers than can be saved");
+				dns_servers_cnt = CONFIG_DNS_RESOLVER_MAX_SERVERS;
+			} else {
+				for (uint8_t i = provided_servers_cnt;
+					 i < CONFIG_DNS_RESOLVER_MAX_SERVERS; i++) {
+					dns_servers[i] = NULL;
+				}
+
+				dns_servers_cnt = provided_servers_cnt;
+			}
+
+			for (uint8_t i = 0; i < dns_servers_cnt; i++) {
+				if (net_pkt_read(pkt, dnses[i].sin_addr.s4_addr, addr_size)) {
+					NET_ERR("options_dns, short packet");
+					return false;
+				}
+			}
+
+			if (net_pkt_skip(pkt, length - dns_servers_cnt * addr_size)) {
 				NET_ERR("options_dns, short packet");
 				return false;
 			}
 
 			ctx = dns_resolve_get_default();
-			dns.sin_family = AF_INET;
+			for (uint8_t i = 0; i < dns_servers_cnt; i++) {
+				dnses[i].sin_family = AF_INET;
+			}
 			status = dns_resolve_reconfigure(ctx, NULL, dns_servers);
 			if (status < 0) {
 				NET_DBG("options_dns, failed to set "
@@ -811,6 +835,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 		}
 #endif
 		case DHCPV4_OPTIONS_LEASE_TIME:
+		 {
 			if (length != 4U) {
 				NET_ERR("options_lease_time, bad length");
 				return false;
@@ -827,7 +852,9 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				iface->config.dhcpv4.lease_time);
 
 			break;
+		 }
 		case DHCPV4_OPTIONS_RENEWAL:
+		{
 			if (length != 4U) {
 				NET_DBG("options_renewal, bad length");
 				return false;
@@ -844,7 +871,9 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				iface->config.dhcpv4.renewal_time);
 
 			break;
+		}
 		case DHCPV4_OPTIONS_REBINDING:
+		{
 			if (length != 4U) {
 				NET_DBG("options_rebinding, bad length");
 				return false;
@@ -862,7 +891,8 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				iface->config.dhcpv4.rebinding_time);
 
 			break;
-		case DHCPV4_OPTIONS_SERVER_ID:
+		}
+		case DHCPV4_OPTIONS_SERVER_ID: {
 			if (length != 4U) {
 				NET_DBG("options_server_id, bad length");
 				return false;
@@ -879,6 +909,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 			NET_DBG("options_server_id: %s",
 				net_sprint_ipv4_addr(&iface->config.dhcpv4.server_id));
 			break;
+		}
 		case DHCPV4_OPTIONS_MSG_TYPE: {
 			if (length != 1U) {
 				NET_DBG("options_msg_type, bad length");
@@ -897,7 +928,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 
 			break;
 		}
-		default:
+		default: {
 			if (unhandled) {
 				NET_DBG("option unknown: %d", type);
 			} else {
@@ -909,6 +940,7 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				return false;
 			}
 			break;
+		}
 		}
 	}
 
