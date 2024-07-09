@@ -45,7 +45,9 @@ static int sendall(int sock, const void *buf, size_t len,
 			pfd.fd = sock;
 			pfd.events = ZSOCK_POLLOUT;
 			pollres = zsock_poll(&pfd, 1, req_timeout_ms);
-			if (pollres >= 0) {
+			if (pollres == 0) {
+				return -ETIMEDOUT;
+			} else if (pollres > 0) {
 				continue;
 			} else {
 				return -errno;
