@@ -61,7 +61,7 @@ jobs:
         -e KconfigBasicNoModules -e ModulesMaintainers -c origin/${BASE_REF}..
 
     - name: upload-results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       continue-on-error: true
       with:
         name: compliance.xml

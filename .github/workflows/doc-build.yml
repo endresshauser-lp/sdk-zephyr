@@ -116,13 +116,13 @@ jobs:
         tar cfJ api-coverage.tar.xz coverage-report
 
     - name: upload-build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: html-output
         path: html-output.tar.xz
 
     - name: upload-api-coverage
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: api-coverage
         path: api-coverage.tar.xz
@@ -142,7 +142,7 @@ jobs:
         echo "API Coverage Report will be available shortly at: ${API_COVERAGE_URL}" >> $GITHUB_STEP_SUMMARY
 
     - name: upload-pr-number
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: github.event_name == 'pull_request'
       with:
         name: pr_num
@@ -210,7 +210,7 @@ jobs:
 
     - name: upload-build
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pdf-output
         if-no-files-found: ignore

@@ -165,7 +165,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bsim-test-results
           path: |
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload Event Details
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: event
           path: |
