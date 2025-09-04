@@ -468,7 +468,8 @@ class Walker:
             # create relationship data between build files
             rd = RelationshipData()
             rd.ownerType = RelationshipDataElementType.FILENAME
-            rd.ownerFileAbspath = pkg.targetBuildFile.abspath
+            if pkg.targetBuildFile is not None:
+                rd.ownerFileAbspath = pkg.targetBuildFile.abspath
             rd.otherType = RelationshipDataElementType.FILENAME
             rd.otherFileAbspath = depAbspath
             rd.rlnType = "STATIC_LINK"
